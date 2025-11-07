@@ -6,8 +6,7 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 #
-# This file implements many functions for data analysis, used in the jupyter notebooks
-# for CodeEvolve.
+# This file implements functions for processing experiment data from CodeEvolve.
 #
 # ===--------------------------------------------------------------------------------------===#
 
@@ -22,11 +21,8 @@ from collections import defaultdict
 import pickle as pkl
 
 import networkx as nx
-from networkx.drawing.nx_pydot import graphviz_layout
 import pandas as pd
 import yaml
-import matplotlib.pyplot as plt
-import numpy as np
 
 from codeevolve.utils.ckpt_utils import load_ckpt
 from codeevolve.database import ProgramDatabase
@@ -35,7 +31,22 @@ from codeevolve.database import ProgramDatabase
 def get_total_runtime(
     log_file_path: str, start_marker: str = "=== EVOLVE ALGORITHM ==="
 ) -> timedelta:
-    """ """
+    """
+    Calculates the total runtime by parsing a log file.
+
+    This function reads a log file and computes the cumulative duration of all
+    evolutionary segments. It identifies the start of each segment using a specific
+    marker line and measures the time until the next marker or the end of the file,
+    summing these durations to get the total runtime.
+
+    Args:
+        log_file_path: The path to the log file to be parsed.
+        start_marker: A string that identifies the beginning of a timed segment
+                    within the log file.
+
+    Returns:
+        A timedelta object representing the total calculated runtime.
+    """
 
     def _parse_time(line: str) -> Optional[datetime]:
         """Extracts datetime from a log line.
@@ -59,7 +70,7 @@ def get_total_runtime(
 
     start_indices = [i for i, line in enumerate(lines) if start_marker in line]
     if not start_indices:
-        return timedelta(0), lines, start_indices
+        return timedelta(0)
 
     total_duration = timedelta(0)
     for i, start_index in enumerate(start_indices):
@@ -74,7 +85,6 @@ def get_total_runtime(
         if end_time and end_time >= start_time:
             segment_duration = end_time - start_time
             total_duration += segment_duration
-
     return total_duration
 
 
@@ -84,7 +94,25 @@ def get_experiment_df(
     config: Dict[Any, Any],
     model_names: List[str],
 ) -> pd.DataFrame:
-    """ """
+    """
+    Compiles detailed experiment results into a Pandas DataFrame.
+
+    This function processes the results from a multi-island experiment, iterating
+    through each island to extract key performance and resource metrics. It gathers
+    data such as training time, best fitness scores, error counts, and token usage
+    for both the main program evolution and the meta-prompting process, then
+    organizes this information into a structured DataFrame for analysis.
+
+    Args:
+        experiment_res: A dictionary containing the results for each island, keyed by island ID.
+        results_dir: The base directory path where island-specific log files are stored.
+        config: The experiment's configuration dictionary.
+        model_names: A list of model names used in the experiment to correctly structure
+                    the token usage columns in the DataFrame.
+
+    Returns:
+        A Pandas DataFrame summarizing the key metrics for each island in the experiment.
+    """
     df_rows = []
 
     for isl_id in experiment_res.keys():
@@ -220,7 +248,26 @@ def get_experiment_df(
 def process_experiments(
     args: Dict, model_names: List[str], model2cost: Dict[str, Dict[str, float]]
 ):
-    """ """
+    """Loads, processes, and summarizes results from multiple experiment directories.
+
+    This function serves as a primary entry point for analyzing a batch of experiments.
+    It iterates through a list of specified experiment output directories, loads the
+    latest checkpoint data for each island, generates a summary DataFrame of metrics,
+    and calculates the estimated LLM cost based on token usage. All processed data
+    is aggregated into a final dictionary, keyed by the experiment path.
+
+    Args:
+        args: A dictionary of arguments, including the input directory (`inpt_dir`)
+            and a list of experiment output directories (`out_dirs`).
+        model_names: A list of model names used, required for cost calculation and
+                    DataFrame generation.
+        model2cost: A dictionary mapping model names to their respective prompt and
+                    completion token costs.
+
+    Returns:
+        A dictionary where keys are experiment paths and values are objects containing
+        the raw results, configuration, summary DataFrame, and estimated cost.
+    """
     experiments_res = {}
     for idx, result_path in enumerate(args["out_dirs"]):
         result_dir = args["inpt_dir"] + f"experiments/{result_path}"
@@ -280,7 +327,22 @@ def process_experiments(
 
 
 def get_experiment_sol(results_dir, sol_func_name, island_id: int):
-    """ """
+    """
+    Loads and returns the final solution object from an experiment's best program file.
+
+    This function dynamically imports the `best_sol.py` file generated by a specific
+    island during an experiment. It then executes a specified function within that
+    module to instantiate and retrieve the final solution object. For caching, it
+    also saves the retrieved solution to a `.pkl` file.
+
+    Args:
+        results_dir: The base directory of the experiment where island results are stored.
+        sol_func_name: The name of the function inside `best_sol.py` to call to get the solution.
+        island_id: The ID of the island from which to load the best solution.
+
+    Returns:
+        The solution object returned by the function from the loaded module.
+    """
     program_path = results_dir + f"{island_id}/best_sol.py"
     if "best_sol" in sys.modules:
         del sys.modules["best_sol"]
@@ -302,154 +364,22 @@ def get_experiment_sol(results_dir, sol_func_name, island_id: int):
     return sol
 
 
-# plotting
+def create_db_tree(db: ProgramDatabase) -> nx.DiGraph:
+    """
+    Constructs an evolutionary lineage tree from a ProgramDatabase.
 
-
-def plot_experiments_statistical_summary(
-    experiments: Dict[str, Dict[int, Any]],
-    title,
-    save_path: str = None,
-    figsize: tuple = (6, 4),
-    epsilon: float = 1e-3,
-):
-    """Plots statistical summary of fitness evolution across multiple experiments.
-
-    This function creates a line plot showing the evolution of fitness values over
-    epochs for multiple experiments. It uses a logarithmic transformation to better
-    visualize convergence towards optimal fitness values and handles NaN values
-    and variable-length histories across experiments.
+    This function converts a ProgramDatabase object into a `networkx.DiGraph`,
+    visualizing the evolutionary history of the programs. Each program becomes a node,
+    and directed edges are drawn from parent programs to their offspring, creating a
+    tree or forest structure. The graph is annotated with the ID of the best program
+    and a list of root nodes.
 
     Args:
-        experiments: Dictionary mapping experiment names to their results containing
-                    fitness histories for each island/run.
-        title: Title for the plot.
-        save_path: Optional path to save the plot image. If None, plot is only displayed.
-        figsize: Tuple specifying the figure size (width, height) in inches.
-        epsilon: Small value used for numerical stability in logarithmic transformation.
+        db: The ProgramDatabase instance containing the full history of all programs.
+
+    Returns:
+        A networkx.DiGraph object representing the program lineage.
     """
-    fig, ax = plt.subplots(1, 1, figsize=figsize)
-
-    default_colors = plt.cm.tab10(np.linspace(0, 1, len(experiments)))
-    default_markers = ["o", "s", "^", "v", "D", "p", "*", "h", "H", "+"]
-
-    all_fitness_values = []
-    experiment_data = {}
-
-    for exp_name, results in experiments.items():
-        all_best_hists = []
-
-        for key, data in results.items():
-            try:
-                best_hist = data["evolve_state"]["best_fit_hist"]
-                if best_hist:
-                    all_best_hists.append(best_hist)
-            except (KeyError, TypeError):
-                continue
-
-        if not all_best_hists:
-            print(f"No valid data found for experiment: {exp_name}")
-            continue
-
-        experiment_data[exp_name] = all_best_hists
-
-        for hist in all_best_hists:
-            for value in hist:
-                if not np.isnan(value):
-                    all_fitness_values.append(value)
-
-    if not all_fitness_values:
-        print("No valid fitness values found across all experiments!")
-        return
-
-    MAX_FITNESS = max(all_fitness_values)
-
-    for exp_idx, (exp_name, all_best_hists) in enumerate(experiment_data.items()):
-
-        def pad_with_last_non_nan(hist):
-            """Pad history with last non-NaN value, handling NaNs properly"""
-            last_valid = None
-            for i in range(len(hist) - 1, -1, -1):
-                if not np.isnan(hist[i]):
-                    last_valid = hist[i]
-                    break
-            if last_valid is None:
-                return None
-
-            cleaned_hist = []
-            current_valid = None
-
-            for value in hist:
-                if not np.isnan(value):
-                    current_valid = value
-                    cleaned_hist.append(value)
-                else:
-                    cleaned_hist.append(current_valid if current_valid is not None else last_valid)
-
-            return cleaned_hist
-
-        cleaned_hists = []
-        for hist in all_best_hists:
-            cleaned = pad_with_last_non_nan(hist)
-            if cleaned is not None:
-                cleaned_hists.append(cleaned)
-
-        if not cleaned_hists:
-            print(f"No valid histories after cleaning NaNs for experiment: {exp_name}")
-            continue
-
-        max_len = max(len(hist) for hist in cleaned_hists)
-        padded_best = []
-        for hist in cleaned_hists:
-            padded = hist + [hist[-1]] * (max_len - len(hist))
-            padded_best.append(padded)
-
-        best_array = np.array(padded_best)
-        best_fitness = np.max(best_array, axis=0)
-        std_best = np.std(best_array, axis=0)
-        epochs = range(1, max_len + 1)
-
-        y_data = np.maximum(MAX_FITNESS + epsilon - best_fitness, epsilon)
-
-        color = default_colors[exp_idx]
-        marker = default_markers[exp_idx % len(default_markers)]
-
-        ax.plot(
-            epochs,
-            -np.log10(y_data),
-            color=color,
-            linewidth=2,
-            marker=marker,
-            markersize=4,
-            markevery=5,
-            label=f"{exp_name}",
-        )
-
-    ax.set_title(title)
-    ax.set_xlabel("Epoch")
-
-    ax.set_ylabel("Target metric")
-
-    ax.axhline(
-        y=-np.log10(MAX_FITNESS + epsilon - 1),
-        linestyle=":",
-        color="gray",
-        alpha=0.7,
-        label=f"AlphaEvolve",
-    )
-
-    ax.grid(True, alpha=0.3)
-    ax.legend()
-
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path, dpi=300, bbox_inches="tight")
-
-    plt.show()
-
-
-def create_db_tree(db: ProgramDatabase) -> nx.DiGraph:
-    """ """
     G = nx.DiGraph()
     for prog_id, prog in db.programs.items():
         G.add_node(prog_id)
@@ -464,143 +394,3 @@ def create_db_tree(db: ProgramDatabase) -> nx.DiGraph:
             G.graph["roots"].append(prog_id)
 
     return G
-
-
-def plot_program_tree(
-    G: nx.DiGraph,
-    node_labels: Dict,
-    color_name: str,
-    node_colors: Dict,
-    num_islands: int,
-    node_to_island: Dict,
-    save_path: str = None,
-    figsize=(12, 10),
-    node_size=160,
-    font_size=8,
-    title=None,
-) -> None:
-    """ """
-
-    fig, ax = plt.subplots(figsize=figsize)
-
-    pos = graphviz_layout(G, prog="dot")
-
-    values = list(node_colors.values())
-    vmin = min(values)
-    vmax = max(values)
-    norm = plt.Normalize(vmin=vmin, vmax=vmax)
-    node_colors_cm = plt.get_cmap("autumn")(norm(np.array(values, dtype=float)))
-
-    island_shapes = ["p", "8", "s", "o", "h"]
-
-    best_id = G.graph["best_prog_id"]
-
-    island_nodes = {}
-    for node in G.nodes():
-        if node != best_id:
-            island_id = node_to_island.get(node, 0)
-            if island_id not in island_nodes:
-                island_nodes[island_id] = []
-            island_nodes[island_id].append(node)
-
-    legend_handles = []
-
-    for island_id, nodes in island_nodes.items():
-        if not nodes:
-            continue
-
-        shape = island_shapes[island_id % len(island_shapes)]
-
-        island_node_colors = [node_colors_cm[list(G.nodes()).index(node)] for node in nodes]
-
-        nx.draw_networkx_nodes(
-            G,
-            pos,
-            ax=ax,
-            nodelist=nodes,
-            node_color=island_node_colors,
-            node_size=node_size,
-            node_shape=shape,
-            edgecolors="black",
-            linewidths=1,
-            alpha=0.8,
-        )
-
-        legend_handles.append(
-            plt.Line2D(
-                [0],
-                [0],
-                marker=shape,
-                color="w",
-                markerfacecolor="gray",
-                markersize=8,
-                label=f"Island {island_id}",
-            )
-        )
-
-    best_island_id = node_to_island.get(best_id, 0)
-    best_shape = island_shapes[best_island_id % len(island_shapes)]
-    best_node_color = node_colors_cm[list(G.nodes()).index(best_id)]
-
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        ax=ax,
-        nodelist=[best_id],
-        node_color=[best_node_color],
-        node_size=node_size * 1.5,
-        node_shape=best_shape,
-        alpha=0.9,
-    )
-
-    nx.draw_networkx_nodes(
-        G,
-        pos,
-        ax=ax,
-        nodelist=[best_id],
-        node_color="none",
-        node_size=node_size * 1.5,
-        node_shape=best_shape,
-        edgecolors="blue",
-        linewidths=2,
-        alpha=1.0,
-    )
-
-    nx.draw_networkx_edges(G, pos, ax=ax, arrows=True, arrowsize=8, edge_color="gray", alpha=0.8)
-
-    nx.draw_networkx_labels(G, pos, ax=ax, labels=node_labels, font_size=font_size)
-
-    legend_handles.append(
-        plt.Line2D(
-            [0],
-            [0],
-            marker=best_shape,
-            color="w",
-            markerfacecolor="white",
-            markeredgecolor="blue",
-            markersize=10,
-            markeredgewidth=2,
-            label=f"Best solution",
-        )
-    )
-
-    legend_handles.sort(key=lambda x: x.get_label())
-    ax.legend(handles=legend_handles, loc="lower right", fontsize=font_size)
-
-    sm = plt.cm.ScalarMappable(cmap=plt.get_cmap("autumn"), norm=norm)
-    sm.set_array([])
-
-    cbar = fig.colorbar(sm, ax=ax)
-    cbar_label = color_name
-    cbar.set_label(cbar_label)
-
-    if title:
-        ax.set_title(title, fontweight="bold")
-    else:
-        ax.set_title(f"Solution evolution forest of best island ({num_islands} islands)")
-
-    plt.tight_layout()
-    ax.axis("off")
-    if save_path:
-        plt.savefig(save_path, dpi=fig.dpi, bbox_inches="tight")
-    plt.show()
