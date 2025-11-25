@@ -1,0 +1,98 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+To numerically solve this problem, we discretize the function `f`.
+-   **Discretization of `f`**: Represent `f` by `N` non-negative values, `f_values = [f_0, f_1, ..., f_{N-1}]`, corresponding to `N` equally spaced points in the interval `[0, 1]`. The grid spacing for `f` is `dx_f = 1.0 / N`.
+-   **Numerical Integration of `f`**: The integral `∫f` can be accurately approximated by `jnp.sum(f_values) * dx_f`.
+-   **Convolution `f ★ f` (let `g = f ★ f`)**:
+    -   Use the Fast Fourier Transform (FFT) for efficient computation.
+    -   Pad `f_values` to a length of `2N` (e.g., `jnp.pad(f_values, (0, N))`) before applying FFT. This ensures the convolution `g` has `2N` points.
+    -   The resulting discrete convolution `g` will effectively span the interval `[0, 2]`.
+    -   The grid spacing for the convolution `dx_conv` should be `2.0 / (2*N) = 1.0 / N`.
+-   **Norm Calculations for `g = f ★ f` (where `conv_vals` are the `2N` discrete values of `g`)**:
+    -   **`||g||₁`**: **Crucially, leverage the simplification**: `||f ★ f||₁ = (∫f)²`. Compute this as `(jnp.sum(f_values) * dx_f)**2`. Do NOT compute this norm directly on the convolution array as it can lead to significant numerical inaccuracies and diverge from the theoretical simplification.
+    -   **`||g||₂²`**: For the squared L2-norm, use a discrete sum (rectangular rule) on the squared convolution values: `jnp.sum(conv_vals**2) * dx_conv`. Ensure to use the correct `dx_conv`.
+    -   **`||g||_{∞}`**: This is simply the maximum value of the absolute convolution: `jnp.max(jnp.abs(conv_vals))`. Since `f` is non-negative, `f ★ f` will also be non-negative, so `jnp.max(conv_vals)` is sufficient.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+-   **Discretization Resolution (`N`)**: The number of intervals `N` significantly impacts both accuracy and computational cost. While `N=200` is a good start, for achieving state-of-the-art results and resolving the fine details of optimal `f` functions, `N` will likely need to be significantly higher, potentially in the range of `N=500` to `N=1000` or even more. Prioritize maximizing `C2` over minimizing `eval_time` for initial exploration, as high resolution is crucial for discovering better lower bounds.
+-   **Initial Guesses for `f_values`**: The choice of initial `f_values` is critical for escaping poor local optima. Instead of purely random initialization, consider starting with functions known to yield reasonable C₂ values or shapes that are effective.
+    -   **Common shapes**:
+        -   **Box function**: Constant (e.g., 1.0) over a central sub-interval of `[0, 1]` and 0 otherwise.
+        -   **Triangular / Tent function**: Peaks in the middle of `[0, 1]` and linearly decreases to zero at the ends. This shape is often a good approximation of optimal solutions in similar problems.
+        -   **Gaussian-like function**: A smooth, bell-shaped curve centered in `[0, 1]`.
+    -   **Advanced Initialization Strategy**: To increase the robustness of the search, consider running the optimization multiple times with different initial guesses (e.g., a few different shapes, or the same shape with different random seeds for perturbation) and selecting the best performing `f_values` to continue a more refined optimization. This ensemble approach helps explore the solution space more effectively.
+-   **Learning Rate Schedule**: Use adaptive learning rates (e.g., Adam, Optax schedules) with warmup and cosine decay to ensure stable convergence and prevent oscillations.
+-   **Regularization**: (Optional, for advanced exploration) Consider adding L1 or L2 regularization to `f_values` to encourage sparsity or smoothness, if the optimization struggles with highly oscillatory solutions or numerical instability.
+
+-   **Multi-Stage Optimization for C₂ Maximization**: For achieving truly groundbreaking results, a multi-stage optimization strategy is highly recommended to balance exploration and fine-tuning:
+    1.  **Exploration Stage**:
+        -   Use a moderate `N` (e.g., `N=200` to `N=500`).
+        -   Employ a relatively higher learning rate and a substantial number of steps (e.g., 10,000-20,000) to broadly explore the solution space.
+        -   Experiment with different initial `f_values` (as suggested above) or multiple random seeds to find a good candidate `f` shape.
+    2.  **Refinement Stage**:
+        -   Take the best `f_values` (or the parameters defining them) from the Exploration Stage as a warm-start.
+        -   Significantly increase `N` (e.g., `N=500` to `N=1000` or higher) to resolve finer details.
+        -   Reduce the learning rate (e.g., by an order of magnitude) and continue optimization for additional steps (e.g., 5,000-10,000). This allows for precise adjustments and pushing the C₂ bound higher, leveraging the higher resolution.
+    This approach balances computational cost with the need for high `N` to resolve fine features and converge to a precise solution.
+
+**Recommended implementation patterns**:
+-   **JAX for Autodiff and JIT**: Leverage `jax.numpy` for array operations and `jax.jit` for compiling core functions (like the training step and objective function) to XLA, significantly speeding up computation. `jax.value_and_grad` is essential for automatic differentiation.
+-   **Enforce Non-negativity**: Ensure `f_values` remain non-negative throughout the optimization. Applying `jax.nn.relu` (or `jnp.maximum(0, f_values)`) after each update or within the objective function is a robust way to enforce this constraint.
+-   **Modularity**: Structure the code into clear, distinct functions for:
+    -   Discretization setup (`dx_f`, `dx_conv`).
+    -   Convolution computation.
+    -   Individual norm calculations (`integral_f`, `norm_1_conv`, `norm_2_conv_squared`, `norm_inf_conv`).
+    -   The overall objective function (`c2_ratio`).
+    -   The training loop.
+    This improves readability, debugging, and ensures correct application of `dx_f` and `dx_conv`.
+-   **Numerical Stability**: Pay attention to potential division by zero or very small numbers in the denominator of the C₂ ratio. Add a small epsilon (e.g., `1e-9`) to the denominator if `norm_1 * norm_inf` could approach zero for trivial functions, although the `∫f > 0` constraint should typically prevent this.
+=======
+
+# PROMPT-BLOCK-END

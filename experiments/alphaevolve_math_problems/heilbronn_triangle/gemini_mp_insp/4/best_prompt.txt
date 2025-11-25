@@ -1,0 +1,130 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a classical problem in discrete geometry that asks for the optimal placement of n points to maximize the minimum triangle area formed by any three points.
+
+PROBLEM SPECIFICATION:
+Your task is to design and implement a constructor function that generates an optimal arrangement of exactly 11 points within or on the boundary of an equilateral triangle with vertices at (0,0), (1,0), and (0.5, sqrt(3)/2).
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: Area of the smallest triangle among all point triplets (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: min_area_normalized / 0.0366 (BENCHMARK COMPARISON - maximize above 1.0)
+3. **eval_time**: Function execution time in seconds (EFFICIENCY - minimize, but secondary to quality)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary computation), `platypus` (NSGA-II)
+- **Metaheuristics**: `scikit-opt` (particle swarm, genetic algorithms), `nevergrad` (gradient-free optimization), `optuna` (Bayesian optimization)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay triangulation), `triangle` (mesh generation)
+- **Constraint programming**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `python-constraint`
+- **High-performance**: `cython` (C extensions), `numexpr` (fast numerical expressions)
+- **Quasi-random sampling**: `sobol_seq` for low-discrepancy point generation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem is a classical open problem in discrete geometry, asking to maximize the minimum area of any triangle formed by a set of `n` points placed within a given domain. For a unit equilateral triangle as the domain, the problem becomes finding the optimal arrangement of `n` points.
+
+For `n=11` points within a unit equilateral triangle (with area `sqrt(3)/4`), the currently best known lower bound (and conjectured optimal value) for the minimum triangle area, when normalized by the triangle's area, is approximately `0.0366`. This value is critical for the `benchmark_ratio` metric. Optimal configurations for this problem are often complex and may involve placing points on the boundary of the domain, rather than strictly in the interior. The problem is characterized by a high-dimensional, non-convex, and often rugged objective landscape, making global optimization challenging.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Given the problem's complexity, the high-dimensional search space (2 * 11 = 22 variables), and the strict time limit (180 seconds), a purely exhaustive global search is unlikely to succeed. A **hybrid optimization strategy** is highly recommended:
+1.  **Exploration (Global Search)**: Employ a global optimization algorithm (e.g., `scipy.optimize.differential_evolution`, Genetic Algorithms from `deap` or `scikit-opt`) for an initial, broader search to identify promising regions. Crucially, tune parameters like `maxiter` and `popsize` to be significantly less aggressive than default or previous attempts, ensuring this phase completes within a reasonable fraction of the total time budget.
+2.  **Exploitation (Local Refinement)**: Follow the global search with a local optimization algorithm (e.g., `scipy.optimize.minimize` with methods like `SLSQP`, `L-BFGS-B`, or the `polish=True` option in `differential_evolution`) starting from the best candidate solution found globally. This step aims to fine-tune the solution for higher precision and convergence within the promising region.
+
+**Initial Population Strategy**: The quality and distribution of the initial population for global optimizers significantly impact convergence speed and solution quality. Utilizing low-discrepancy sequences (e.g., Sobol sequences via `sobol_seq`) or Latin Hypercube Sampling (`init='latinhypercube'` in `differential_evolution`) can provide a better-distributed starting set of points across the search space compared to purely random initialization.
+
+**Constraint Handling**: The triangular domain must be strictly enforced. `scipy.optimize.LinearConstraint` is an effective and robust method for applying these linear boundary conditions to the point coordinates.
+
+**DETAILED IMPLEMENTATION GUIDANCE**:
+
+To produce a complete and robust solution, follow these steps and function structures. Adhering to this structure will ensure all requirements are met, especially the time limit and reproducibility.
+
+1.  **Constants and Domain Definition**:
+    -   `N = 11`: Number of points.
+    -   `TRIANGLE_VERTICES`: `np.array([(0, 0), (1, 0), (0.5, np.sqrt(3)/2)])` for the unit equilateral triangle.
+    -   `UNIT_TRIANGLE_AREA = np.sqrt(3)/4`.
+    -   `RANDOM_SEED = 42`: Use this for all stochastic components for reproducibility.
+
+2.  **Helper Function: `_min_triangle_area(points: np.ndarray) -> float`**:
+    -   Input: `points` (N, 2) NumPy array.
+    -   Calculates the area of all possible triplets of points.
+    -   **Vectorized Area Calculation**:
+        -   First, handle edge cases: If `len(points) < 3`, return `0.0`.
+        -   Utilize `itertools.combinations` to generate indices of all `N choose 3` triplets.
+        -   For each triplet of points `(p1, p2, p3)`, the area can be calculated using the determinant formula: `0.5 * abs(p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))`.
+        -   Extract all `p1`, `p2`, `p3` coordinates for all combinations using the generated indices and apply the area formula in a vectorized manner using NumPy.
+        -   **Example of vectorized approach**:
+            ```python
+            import itertools
+            # ... inside _min_triangle_area(points)
+            num_points = len(points)
+            if num_points < 3:
+                return 0.0 # Cannot form a triangle
+            
+            indices = np.array(list(itertools.combinations(range(num_points), 3)))
+            
+            p1 = points[indices[:, 0]] # Shape (num_combinations, 2)
+            p2 = points[indices[:, 1]]
+            p3 = points[indices[:, 2]]
+            
+            # Vectorized area calculation using the determinant formula
+            areas = 0.5 * np.abs(p1[:,0]*(p2[:,1]-p3[:,1]) + p2[:,0]*(p3[:,1]-p1[:,1]) + p3[:,0]*(p1[:,1]-p2[:,1]))
+            
+            return np.min(areas)
+            ```
+    -   Return the minimum area found. If any three points are collinear (area is 0), this function should correctly return `0.0`.
+
+3.  **Helper Function: `_objective_function(flat_points: np.ndarray) -> float`**:
+    -   Input: `flat_points` (2*N,) flattened NumPy array of point coordinates (x0, y0, x1, y1, ...).
+    -   Reshapes `flat_points` into an `(N, 2)` array.
+    -   Calls `_min_triangle_area` with the reshaped points.
+    -   **Critical**: If `_min_triangle_area` returns `0.0` (indicating collinear points or insufficient points), this represents an invalid or degenerate configuration that must be heavily penalized. In such cases, return `np.inf` to strongly guide the optimizer away from these solutions. Otherwise, return the *negative* of the minimum area, as `scipy.optimize` functions are designed for minimization.
+
+4.  **Helper Function: `_create_linear_constraints(n_points: int) -> scipy.optimize.LinearConstraint`**:
+    -   Defines the linear constraints for points `(x_i, y_i)` to be strictly within or on the boundary of the unit equilateral triangle.
+    -   The unit equilateral triangle has vertices: `(0,0), (1,0), (0.5, np.sqrt(3)/2)`.
+    -   The constraints for each point `(x, y)` are derived from the lines forming the triangle:
+        -   Bottom edge (y-axis): `y >= 0`
+        -   Left edge (line through (0,0) and (0.5, sqrt(3)/2)): `sqrt(3) * x - y >= 0`
+        -   Right edge (line through (1,0) and (0.5, sqrt(3)/2)): `sqrt(3) * x + y <= sqrt(3)`
+    -   Construct a single `scipy.optimize.LinearConstraint` object for the flattened `2*n_points` vector.
+    -   **Implementation Detail**: Create a sparse or dense `A` matrix of shape `(3*n_points, 2*n_points)` and corresponding `lb`, `ub` vectors. Each point `(x_i, y_i)` corresponds to `x[2*i]` and `x[2*i+1]` in the flattened optimization vector.
+
+5.  **Main Constructor Function: `heilbronn_triangle11() -> np.ndarray`**:
+    -   Ensure necessary imports: `import numpy as np`, `import itertools`, and `from scipy.optimize import differential_evolution, LinearConstraint, minimize`.
+    -   Initialize `n=11`, `RANDOM_SEED`, `UNIT_TRIANGLE_AREA`.
+    -   Define the search `bounds` for `differential_evolution`: For each point `(x_i, y_i)`, `x_i` is in `[0, 1]` and `y_i` is in `[0, np.sqrt(3)/2]`. This means the `bounds` list for the flattened `2*N` vector will be `([(0, 1), (0, np.sqrt(3)/2)]) * N`.
+    -   Call `_create_linear_constraints(n)` to get the `LinearConstraint` object.
+    -   **Global Optimization (`scipy.optimize.differential_evolution`)**:
+        -   `result_global = differential_evolution(_objective_function, bounds, constraints=constraints, seed=RANDOM_SEED, maxiter=..., popsize=..., init='sobol', workers=-1, polish=True)`
+        -   **Crucially**: The primary objective is to maximize the minimum triangle area, and the 180-second time limit is a constraint, not a target for minimization. Given the available computational budget, `maxiter` and `popsize` **MUST** be set to aggressive values to allow for a deeper and more thorough search within the allocated time. For `N=11` (22 variables), parameters like `maxiter=1000` to `2000` and `popsize=30` to `50` are more appropriate as starting points to fully utilize the 180-second time limit for a thorough global exploration, especially given `workers=-1`. **Prioritize leveraging the full time budget to achieve a higher `min_area_normalized` by increasing these parameters until the 180-second limit is closely approached.** Initial calibration may be necessary.
+        -   `init='sobol'` or `init='latinhypercube'` is preferred over 'random' for better initial population distribution.
+        -   `workers=-1` is recommended for parallel execution if available.
+        -   `polish=True` is highly recommended for automatic local refinement of the best solution found by the global search.
+    -   **Local Refinement (`scipy.optimize.minimize`)**:
+        -   After the global search, apply a more focused local optimization using `scipy.optimize.minimize` starting from `result_global.x`. This can further fine-tune the solution.
+        -   `result_local = minimize(_objective_function, result_global.x, method='SLSQP', bounds=bounds, constraints=constraints)`
+        -   Note: `scipy.optimize.minimize` methods like `SLSQP` do not accept a `seed` parameter directly. Determinism for local refinement relies on the deterministic starting point from `differential_evolution`.
+        -   Use `result_local.x` as the final optimized flattened points if `result_local.success` is True and its objective value is better than `result_global.fun`. Otherwise, revert to `result_global.x`.
+    -   Reshape the best `result_local.x` (or `result_global.x` if local refinement fails or is worse) back into `(N, 2)` points.
+    -   Return the optimized `points` array.
+
+VALIDATION FRAMEWORK:
+-   **Point Containment**: After optimization, verify that all 11 generated points lie strictly within or on the boundary of the specified equilateral triangle.
+-   **Minimum Area Calculation**: Thoroughly test the `_min_triangle_area` function with diverse point configurations, including those expected to yield zero area (collinear points) and those with known non-zero areas.
+-   **Area Normalization**: Confirm that the calculated minimum area is correctly normalized by the area of the unit equilateral triangle (`sqrt(3)/4`) to enable accurate comparison with benchmarks.
+-   **Benchmark Comparison**: The `benchmark_ratio` is a direct measure against the target `0.0366`. The primary objective is to achieve a ratio of 1.0 or greater.
+
+CONSTRAINTS AND CRITICAL REQUIREMENTS:
+-   **Number of Points**: The solution must always generate exactly 11 points.
+-   **Domain Adherence**: All points must be precisely located within or on the boundary of the specified equilateral triangle.
+-   **Non-collinearity**: The objective function must effectively penalize (e.g., by returning a very low or zero area) configurations where three or more points are collinear.
+-   **Computational Time Limit**: The entire optimization process, including initial population generation, global search, and local refinement, **MUST complete within 180 seconds**. This is a hard constraint that requires careful selection and tuning of optimization algorithms and their parameters.
+-   **Reproducibility**: All stochastic components of the optimization must be seeded for deterministic results, allowing for consistent evaluation.
+
+# PROMPT-BLOCK-END

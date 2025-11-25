@@ -1,0 +1,121 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 26 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.6358627564136983
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 26 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.6358627564136983 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem of maximizing the sum of radii for non-overlapping circles within a square is a challenging non-convex global optimization problem. Due to the high dimensionality (3 * 26 = 78 variables) and non-linear constraints, gradient-based methods are prone to getting stuck in local optima. Therefore, metaheuristic global optimization algorithms are highly recommended.
+
+1.  **Penalty Method with Global Optimization:**
+    *   **Objective Function:** Define a single objective function `f(variables)` to minimize. This function should be `-sum(radii)` (to maximize sum_radii) plus large penalty terms for any constraint violations.
+    *   **Variables:** The optimization variables should be a flattened 1D numpy array representing `[x1, y1, r1, x2, y2, r2, ..., x26, y26, r26]`.
+    *   **Penalty Terms:**
+        *   **Boundary Violation:** For each circle `i`, penalize if `xi < ri` or `xi > 1-ri` or `yi < ri` or `yi > 1-ri`. A quadratic penalty `k * (violation_amount)^2` is effective.
+        *   **Overlap Violation:** For each pair of circles `(i, j)`, penalize if `distance((xi,yi), (xj,yj)) < ri + rj`. Again, a quadratic penalty `k * (overlap_amount)^2` where `overlap_amount = (ri + rj) - distance` is suitable.
+        *   **Negative Radii:** Strongly penalize `ri <= 0`.
+    *   **Optimization Algorithm:**
+        *   `scipy.optimize.differential_evolution`: A robust global optimizer well-suited for non-convex problems with many variables. It can handle bounds on variables directly.
+        *   `scipy.optimize.basinhopping`: Another global optimization algorithm that combines local minimization with random jumps.
+        *   `deap` (Evolutionary Algorithms): If `scipy`'s built-in options are insufficient, `deap` offers a flexible framework for implementing custom genetic algorithms, which could explore the solution space more thoroughly.
+
+2.  **Initial Population/Guess:**
+    *   Start with a diverse initial population of circle configurations.
+    *   Random placement of small circles within the square is a common strategy.
+    *   Alternatively, a grid-like initial placement could provide a structured start.
+    *   Ensure initial radii are positive but small enough to minimize initial overlaps.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Optimal Packing Characteristics:**
+    *   **Contact Graph:** In optimal packings, circles tend to be "tightly packed," meaning many circles will be touching other circles or the boundaries of the square. This forms a "contact graph" where circles are nodes and touching circles share an edge.
+    *   **No Rattlers:** An optimal packing typically has no "rattlers" – circles that are free to move without breaking any constraints. Every circle should be constrained by its neighbors or the boundary.
+    *   **Symmetry:** While perfect hexagonal packing is optimal for an infinite plane, the square boundary often breaks perfect symmetry. However, local hexagonal arrangements can still be observed. For N=26, highly symmetric solutions are less likely to be strictly optimal due to edge effects, but approximate symmetries might emerge.
+2.  **Distance Calculations:** The core of the non-overlap constraint relies on efficient Euclidean distance calculations. `numpy`'s vectorized operations are crucial here.
+3.  **Containment:** The containment constraint `ri <= xi <= 1-ri` and `ri <= yi ≤ 1-ri` implies that the center `(xi, yi)` must be within a smaller square `[ri, 1-ri] x [ri, 1-ri]`. This defines the search space for `x` and `y` for each circle.
+
+**Recommended implementation patterns:**
+1.  **State Representation:** Represent the 26 circles as a flattened `numpy` array `[x1, y1, r1, x2, y2, r2, ..., x26, y26, r26]`. This is the standard input format for `scipy.optimize` functions.
+2.  **Objective Function (`objective_func(variables)`):**
+    *   Reshape the input `variables` into a `(26, 3)` array `(x, y, r)`.
+    *   Initialize `total_penalty = 0`.
+    *   **Radii Constraint:** Add a penalty for `r <= 0`. For example: `total_penalty += np.sum(np.maximum(0, -radii)) * large_factor`.
+    *   **Boundary Constraints:**
+        `x_min_violation = np.maximum(0, radii - x_coords)`
+        `x_max_violation = np.maximum(0, x_coords + radii - 1)`
+        `y_min_violation = np.maximum(0, radii - y_coords)`
+        `y_max_violation = np.maximum(0, y_coords + radii - 1)`
+        `total_penalty += (np.sum(x_min_violation**2) + np.sum(x_max_violation**2) + np.sum(y_min_violation**2) + np.sum(y_max_violation**2)) * penalty_weight_boundary`
+    *   **Overlap Constraints:**
+        *   Calculate all pairwise Euclidean distances. `scipy.spatial.distance.pdist` can be useful for this.
+        *   For each pair `(i, j)`: `dist_ij = np.sqrt((xi-xj)**2 + (yi-yj)**2)`
+        *   `overlap = np.maximum(0, (ri + rj) - dist_ij)`
+        *   `total_penalty += np.sum(overlap**2) * penalty_weight_overlap` (ensure to handle `i!=j` only)
+        *   A more efficient way for pairwise overlap:
+            `centers = circles[:, :2]`
+            `radii_sum_matrix = radii[:, np.newaxis] + radii[np.newaxis, :]`
+            `dist_matrix = scipy.spatial.distance.cdist(centers, centers)`
+            `overlap_matrix = np.maximum(0, radii_sum_matrix - dist_matrix)`
+            `np.fill_diagonal(overlap_matrix, 0)` # No self-overlap
+            `total_penalty += np.sum(overlap_matrix**2) * penalty_weight_overlap`
+    *   Return `-np.sum(radii) + total_penalty`.
+3.  **Bounds for Optimization:** Set `bounds` for `x, y, r` for `scipy.optimize.differential_evolution`.
+    *   `x_bounds = (0, 1)`
+    *   `y_bounds = (0, 1)`
+    *   `r_bounds = (0, 0.5)` (max radius is 0.5 if centered)
+    *   Note: The `ri <= xi <= 1-ri` constraint is handled by penalties, but tight bounds on `x,y` can still be useful for exploration.
+4.  **Reproducibility:** Use `np.random.seed()` for the `differential_evolution` algorithm.
+5.  **Helper Functions:** Encapsulate logic for calculating penalties and validating configurations into separate functions for clarity and testability.
+
+VALIDATION FRAMEWORK:
+After the optimization converges, it's crucial to validate the resulting circle arrangement to ensure all hard constraints are met. The objective function uses penalties, which might allow for tiny violations if the optimizer doesn't fully converge to zero penalty.
+
+1.  **`is_valid_configuration(circles: np.ndarray) -> bool` function:**
+    *   Input: `circles` array `(26, 3)` of `(x, y, r)`.
+    *   **Check 1: Positive Radii:** All `r_i > 0`.
+    *   **Check 2: Containment:** For each circle `i`:
+        *   `r_i <= x_i <= 1 - r_i`
+        *   `r_i <= y_i <= 1 - r_i`
+    *   **Check 3: Non-overlap:** For all distinct pairs `(i, j)`:
+        *   `distance((x_i, y_i), (x_j, y_j)) >= r_i + r_j` (allow a small epsilon for floating point precision, e.g., `dist >= r_i + r_j - 1e-9`).
+    *   Return `True` if all checks pass, `False` otherwise.
+2.  **Error Reporting:** If `is_valid_configuration` returns `False`, provide detailed information about which constraints were violated and by how much.
+3.  **Visualization (Optional but Recommended):** Use `matplotlib` to plot the unit square and all 26 circles. This provides immediate visual confirmation of the packing quality and helps identify any obvious violations or suboptimal arrangements.
+    *   `import matplotlib.pyplot as plt`
+    *   `from matplotlib.patches import Circle`
+    *   `fig, ax = plt.subplots()`
+    *   `ax.set_aspect('equal', adjustable='box')`
+    *   `ax.set_xlim(0, 1); ax.set_ylim(0, 1)`
+    *   `for x, y, r in circles: ax.add_patch(Circle((x, y), r, color='blue', alpha=0.6))`
+    *   `plt.show()`
+
+# PROMPT-BLOCK-END
+    

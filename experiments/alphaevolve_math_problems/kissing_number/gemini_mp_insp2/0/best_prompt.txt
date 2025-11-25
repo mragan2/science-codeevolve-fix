@@ -1,0 +1,43 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+TODO
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+TODO
+
+**Recommended implementation patterns**:
+TODO
+
+# PROMPT-BLOCK-END

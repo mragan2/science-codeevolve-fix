@@ -1,0 +1,70 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a fundamental challenge in discrete geometry first posed by Hans Heilbronn in 1957.
+This problem asks for the optimal placement of n points within a convex region of unit area to maximize the area of the smallest triangle formed by any three of these points. 
+Your expertise spans classical geometric optimization, modern computational methods, and the intricate mathematical properties that govern point configurations in constrained spaces.
+
+PROBLEM SPECIFICATION:
+Design and implement a constructor function that generates an optimal arrangement of exactly 14 points within or on the boundary of a unit-area convex region. The solution must:
+- Place all 14 points within or on a convex boundary
+- Maximize the minimum triangle area among all C(14,3) = 364 possible triangles
+- Return deterministic, reproducible results
+- Execute efficiently within computational constraints
+
+BENCHMARK & PERFORMANCE TARGET:
+- **CURRENT STATE-OF-THE-ART**: min_area_normalized = 0.0278 (achieved by AlphaEvolve algorithm)
+- **PRIMARY METRIC**: min_area_normalized = (smallest triangle area) / (convex hull area)
+- **SUCCESS CRITERION**: benchmark_ratio = min_area_normalized / 0.0278 > 1.0
+- **SIGNIFICANCE**: Even marginal improvements (benchmark_ratio > 1.01) represent meaningful advances in this notoriously difficult problem
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary algorithms), `nevergrad` (gradient-free optimization)
+- **Metaheuristics**: `scikit-opt` (PSO, GA, SA), `optuna` (Bayesian optimization), `hyperopt` (hyperparameter tuning)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay, Voronoi, ConvexHull), `trimesh` (mesh processing)
+- **Specialized algorithms**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `casadi` (nonlinear optimization)
+- **High-performance computing**: `cython` (C extensions), `dask` (parallel computing)
+- **Quasi-random sequences**: `sobol_seq` for low-discrepancy initialization
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: (Area of smallest triangle) / (Area of convex hull) [PRIMARY - MAXIMIZE]
+2. **benchmark_ratio**: min_area_normalized / 0.0278 [BENCHMARK COMPARISON - TARGET > 1.0]
+3. **eval_time**: Execution time in seconds [EFFICIENCY - secondary priority]
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+# PROMPT-BLOCK-START
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem for n points in a unit-area convex region (e.g., the unit square [0,1]x[0,1]) seeks to maximize the minimum area of any triangle formed by three of these n points. Let D(n) denote this maximum possible minimum area. The problem is notoriously difficult, with exact values known only for very small n. For general n, bounds exist (e.g., D(n) = O(1/n^(8/7))). For n=14, the problem requires a global optimization search in a 28-dimensional continuous space (2 coordinates per point * 14 points). The objective function is non-smooth and highly multi-modal due to the `min` operator. The search space is typically the unit square for practical implementations, where points (x,y) must satisfy 0 <= x, y <= 1. The area of a triangle formed by points (x1, y1), (x2, y2), (x3, y3) can be calculated using the Shoelace formula: `0.5 * abs(x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2))`. Normalization by the convex hull area ensures the metric is robust to minor boundary variations.
+
+ADVANCED OPTIMIZATION STRATEGIES:
+Given the non-differentiable and high-dimensional nature of the objective function, gradient-free global optimization algorithms are essential.
+1.  **Evolutionary Algorithms (EAs)**: Genetic Algorithms (GAs), Differential Evolution (DE), or Evolution Strategies (ES) are well-suited. Libraries like `deap` or `scikit-opt` provide robust implementations. EAs explore the search space broadly, making them effective at finding global optima in complex landscapes. Be mindful that EAs can require a very large number of objective function evaluations. Parameters like `maxiter` (number of generations) and `popsize` (population size) directly impact the total computation time and *must be carefully balanced against the given time limit* to avoid timeouts.
+2.  **Bayesian Optimization**: For expensive objective functions, `optuna` or `hyperopt` can be highly efficient by building a probabilistic model of the objective function. This might be too slow if each objective evaluation is very fast but requires many iterations.
+3.  **Simulated Annealing (SA)**: A metaheuristic that can escape local optima by accepting worse solutions with a decreasing probability. `scikit-opt` offers an SA implementation.
+4.  **Hybrid Approaches**: Combining global search (e.g., EAs) with local search (e.g., Nelder-Mead from `scipy.optimize`) can refine solutions found by metaheuristics.
+5.  **Initialization**: The choice of initial point configurations is critical. Random initialization is a baseline. Low-discrepancy sequences like Sobol sequences (from `sobol_seq`) or Halton sequences can provide more uniform coverage of the search space, potentially leading to better starting points for optimization.
+6.  **Constraints Handling**: Points must remain within the unit square `[0,1]x[0,1]`. This can be enforced by bounding the search variables directly in the optimizer or by penalizing solutions where points are outside the bounds.
+
+GEOMETRIC INSIGHTS & HEURISTICS:
+1.  **Convex Hull**: Optimal configurations often have a significant number of points lying on the convex hull of the set. For n=14, it's highly probable that most, if not all, points will be on the boundary of the unit square.
+2.  **Symmetry**: While not strictly required, configurations with some degree of rotational or reflectional symmetry often yield good results in geometric optimization problems.
+3.  **Avoid Degeneracy**: The optimization process must strongly penalize or avoid configurations where three points are collinear (leading to zero triangle area).
+4.  **Efficient Area Calculation**: Calculating C(14,3) = 364 triangle areas in each iteration can be optimized using vectorized NumPy operations.
+5.  **Convex Hull Area**: The area of the convex hull of the n points is needed for normalization. `scipy.spatial.ConvexHull` can compute this efficiently. If all points are within the unit square `[0,1]x[0,1]`, the convex hull area will be less than or equal to 1.0.
+6.  **"Pushing" points**: The objective function implicitly "pushes" points away from each other to maximize the minimum distance/area, often leading to points distributed somewhat uniformly but with complex local arrangements.
+
+**Recommended implementation patterns**:
+1.  **Objective Function**: Create a dedicated function, `calculate_min_normalized_area(points: np.ndarray) -> float`, that takes an `(N, 2)` NumPy array of points, computes all triangle areas, finds the minimum, calculates the convex hull area, and returns the normalized result. This function will be passed to the optimizer.
+2.  **Vectorization**: Utilize `numpy` for all geometric calculations (distances, areas) to maximize performance. Avoid explicit Python loops over points where `numpy` functions can be used.
+3.  **Reproducibility**: Ensure all stochastic components (e.g., initial population generation for EAs, random number generators) are seeded for deterministic results. Use `np.random.default_rng(seed=...)`.
+4.  **Modular Design**: Separate concerns into helper functions: one for triangle area calculation, one for convex hull area, and the main objective function.
+5.  **Parameter Tuning**: Optimization algorithms often have hyperparameters (e.g., population size, mutation rate, number of generations, temperature schedule). These must be carefully tuned to achieve the benchmark target *within the given time limit*. For `scipy.optimize.differential_evolution`, `maxiter` and `popsize` are critical. Given the 180-second time limit for a 28-dimensional problem, and the relatively expensive `ConvexHull` calculation within the objective function, a `maxiter` in the range of `500-1500` and `popsize` around `10-20` might be more feasible than higher values. Utilize `workers=-1` to leverage all available CPU cores for parallelization, but remember that total computation still scales with `maxiter * popsize`.
+6.  **Region**: Explicitly define the working region for point coordinates as the unit square `[0,1]x[0,1]`.
+
+# PROMPT-BLOCK-END
+
+    

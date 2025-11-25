@@ -1,0 +1,121 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a fundamental challenge in discrete geometry first posed by Hans Heilbronn in 1957.
+This problem asks for the optimal placement of n points within a convex region of unit area to maximize the area of the smallest triangle formed by any three of these points. 
+Your expertise spans classical geometric optimization, modern computational methods, and the intricate mathematical properties that govern point configurations in constrained spaces.
+
+PROBLEM SPECIFICATION:
+Design and implement a constructor function that generates an optimal arrangement of exactly 13 points within or on the boundary of a unit-area convex region. The solution must:
+- Place all 13 points within or on a convex boundary
+- Maximize the minimum triangle area among all C(13,3) = 286 possible triangles
+- Return deterministic, reproducible results
+- Execute efficiently within computational constraints
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary algorithms), `nevergrad` (gradient-free optimization)
+- **Metaheuristics**: `scikit-opt` (PSO, GA, SA), `optuna` (Bayesian optimization), `hyperopt` (hyperparameter tuning)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay, Voronoi, ConvexHull), `trimesh` (mesh processing)
+- **Specialized algorithms**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `casadi` (nonlinear optimization)
+- **High-performance computing**: `cython` (C extensions), `dask` (parallel computing)
+- **Quasi-random sequences**: `sobol_seq` for low-discrepancy initialization
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: (Area of smallest triangle) / (Area of convex hull) [PRIMARY - MAXIMIZE]
+2. **benchmark_ratio**: min_area_normalized / 0.0309 [BENCHMARK COMPARISON - TARGET > 1.0]
+3. **eval_time**: Execution time in seconds [EFFICIENCY - secondary priority]
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+- **PROBLEM COMPLEXITY**: The Heilbronn problem is among the most challenging in discrete geometry, with optimal configurations rigorously known only for n ≤ 4 points
+- **ASYMPTOTIC BEHAVIOR**: For large n, the optimal value approaches O(1/n²) with logarithmic corrections, but the exact constant remains unknown
+- **GEOMETRIC CONSTRAINTS**: Points must balance competing objectives:
+  * Interior points can form larger triangles but create crowding
+  * Boundary points avoid area penalties but limit triangle formation
+  * Edge cases arise when three points become nearly collinear
+- **SYMMETRY CONSIDERATIONS**: Optimal configurations often exhibit rotational symmetries (particularly 3-fold due to triangular geometry)
+- **SCALING INVARIANCE**: The problem is scale-invariant; solutions can be normalized to any convex region
+- **CRITICAL GEOMETRIC PROPERTIES**:
+  * Delaunay triangulation properties and angle optimization
+  * Voronoi diagram regularity as indicator of point distribution quality
+  * Relationship between circumradius and triangle area
+  * Connection to sphere packing and energy minimization principles
+
+ADVANCED OPTIMIZATION STRATEGIES:
+Given the problem's non-convexity and the difficulty of finding exact solutions for n=13, a robust global optimization approach is essential.
+- **TARGET REGION**: For implementation, assume the unit convex region is a **unit square** `[0,1]x[0,1]`. This is a common and practical assumption for initial exploration of the Heilbronn problem.
+- **RECOMMENDED STRATEGY**: Employ a global optimization algorithm from `scipy.optimize`, such as `differential_evolution` or `basin_hopping`. These methods are well-suited for high-dimensional, non-convex problems and can explore the search space effectively.
+- **MULTI-SCALE APPROACH**: Coarse global search → fine local refinement with adaptive step sizes
+- **CONSTRAINT HANDLING**: For optimization within the unit square `[0,1]x[0,1]`, use the `bounds` parameter in `scipy.optimize` functions. Each point's x and y coordinates should be constrained between 0 and 1.
+- **INITIALIZATION STRATEGIES**:
+  * Perturbed regular grids (triangular, square, hexagonal lattices)
+  * Random points with force-based relaxation
+  * Symmetry-constrained configurations (3-fold, 6-fold rotational)
+  * Hybrid boundary/interior distributions
+  * Low-discrepancy sequences (Sobol, Halton) for uniform coverage
+- **OBJECTIVE FUNCTION DESIGN**:
+  The primary objective is to *maximize* the minimum triangle area. Therefore, the optimization function should aim to *minimize* the negative of the minimum triangle area.
+  * **Core Calculation**: The objective function must efficiently calculate the area of all C(13,3) triangles. Vectorized cross products are highly recommended for this. For three points (p1, p2, p3), the area is `0.5 * abs(p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))`.
+  * **Minimization Target**: Return `-np.min(all_triangle_areas)` to convert the maximization problem into a minimization problem for standard optimizers.
+  * **Handling Degeneracy**: Near-collinear points result in very small areas. The objective function inherently penalizes these.
+  * **Smooth Approximations (Optional but advanced)**: While `differential_evolution` can handle non-smooth objectives, for potential future refinement with gradient-based methods, consider smooth approximations to the `min()` function (e.g., LogSumExp or p-norms with p→∞ for large p).
+- **ADVANCED TECHNIQUES**:
+  * Riemannian optimization on manifolds
+  * Variational methods treating point density as continuous field
+  * Machine learning-guided search using learned geometric priors
+  * Topological optimization considering point connectivity graphs
+  * Continuation methods with parameter homotopy
+
+GEOMETRIC INSIGHTS & HEURISTICS:
+- **BOUNDARY CONSIDERATIONS**: Points on boundary contribute to convex hull but may form smaller triangles
+- **TRIANGLE DEGENERACY**: Avoid near-collinear configurations that create arbitrarily small triangles
+- **LOCAL VS GLOBAL**: Balance between locally optimal triangle sizes and global configuration harmony
+- **SYMMETRY EXPLOITATION**: 3-fold rotational symmetry often appears in optimal configurations
+- **VORONOI RELATIONSHIPS**: Points should have roughly equal Voronoi cell areas for optimal distribution
+- **ENERGY ANALOGIES**: Treat as electrostatic repulsion or gravitational equilibrium problem
+- **HISTORICAL APPROACHES**:
+  * Regular lattice arrangements (suboptimal but provide baselines)
+  * Hexagonal close-packing adaptations
+  * Force-based relaxation (treating points as mutually repelling particles)
+  * Simulated annealing and evolutionary computation
+  * Gradient descent with carefully designed objective functions
+
+**Recommended implementation patterns**:
+- **OPTIMIZATION ENGINES**: Utilize `scipy.optimize.differential_evolution` or `scipy.optimize.basin_hopping` as the primary optimization engine, as they are robust for global search and handle bounds well.
+- **OBJECTIVE FUNCTION IMPLEMENTATION**:
+    - Create a helper function `calculate_triangle_areas(points)` that takes an `(N, 2)` array of points and returns an array of all C(N,3) triangle areas. This function should use `itertools.combinations` for selecting point triplets and vectorized cross products for area calculation.
+    - The main objective function `objective(flat_points)` should:
+        1. Reshape `flat_points` (a 1D array of 2N coordinates) into an `(N, 2)` array of points.
+        2. Call `calculate_triangle_areas` to get all triangle areas.
+        3. Return `-np.min(all_triangle_areas)` to convert the maximization problem into a minimization problem suitable for `scipy.optimize`.
+- **ACCELERATION**: To ensure efficient execution and prevent timeouts, it is **crucial** to apply `numba.jit` to the `calculate_triangle_areas` function. This will significantly accelerate the inner loops of triangle area computation, which is a key performance bottleneck for `differential_evolution`.
+- **INITIALIZATION**: For the initial population in `differential_evolution`, consider using low-discrepancy sequences (e.g., from `sobol_seq` if available, or a basic Sobol sequence generator) for more uniform coverage than pure random initialization. This can be specified via the `init` parameter.
+- **DETERMINISM**: Ensure a fixed `seed` is consistently used for `np.random.default_rng` and passed to the optimization function for full reproducibility.
+- **GRAPH ANALYSIS**: While `scipy.spatial.Delaunay` can be useful for understanding triangulations, the Heilbronn problem's objective requires checking *all* C(N,3) triangles, not just those in the Delaunay triangulation.
+
+VALIDATION FRAMEWORK:
+- **Geometric constraint verification**:
+  * Point count validation: Exactly 13 points required
+  * Convexity check: All points within or on boundary of convex hull
+- **Data integrity checks**:
+  * Coordinate bounds: All coordinates are finite real numbers
+  * Point uniqueness: No duplicate points (within numerical tolerance)
+  * Geometric consistency: Points form valid geometric configuration
+- **Solution quality assessment**:
+  * Local optimality testing through small perturbations
+  * Symmetry analysis: Detection of rotational/reflectional symmetries
+  * Distribution quality: Voronoi cell area variance, nearest neighbor statistics
+  * Convergence verification: For iterative methods, check convergence criteria
+- **Determinism verification**:
+  * Multiple execution consistency: Same results across multiple runs
+  * Seed effectiveness: Proper random seed implementation
+  * Platform independence: Results stable across different computing environments
+
+# PROMPT-BLOCK-END
+    

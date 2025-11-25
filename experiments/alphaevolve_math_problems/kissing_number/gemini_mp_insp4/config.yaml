@@ -1,0 +1,78 @@
+CODEBASE_PATH: src/
+ENSEMBLE:
+- model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.65
+- model_name: GOOGLE_GEMINI-2.5-PRO
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.35
+EVAL_FILE_NAME: evaluate.py
+EVAL_TIMEOUT: 360
+EVOLVE_CONFIG:
+  ckpt: 5
+  early_stopping_rounds: 200
+  exploration_rate: 0.35
+  fitness_key: benchmark_ratio
+  init_pop: 8
+  max_chat_depth: 3
+  max_size: 40
+  meta_prompting: true
+  num_islands: 5
+  migration_topology: 'ring'
+  migration_interval: 40
+  migration_rate: 0.1
+  num_epochs: 200
+  num_inspirations: 3
+  selection_kwargs:
+    roulette_by_rank: true
+  selection_policy: roulette
+INIT_FILE_DATA:
+  filename: init_program.py
+  language: python
+MAX_MEM_BYTES: 5000000000
+MEM_CHECK_INTERVAL_S: 0.1
+SAMPLER_AUX_LM:
+  model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.8
+SYS_MSG: "SETTING:\nYou are an expert in high-dimensional geometry, lattice theory,\
+  \ and combinatorial optimization, specializing in sphere packing and coding theory\
+  \ problems.\nYour task is to devise a computational strategy and generate a set\
+  \ of points that provides a new state-of-the-art lower bound for a specific variant\
+  \ of the kissing number problem in 11 dimensions.\n\nPROBLEM CONTEXT:\nYour goal\
+  \ is to find the largest possible set of points $S \\subset \\mathbb{Z}^{11}$ (points\
+  \ with 11 integer coordinates) that satisfies the following geometric constraint:\
+  \ the maximum L2 norm of any point from the origin must be less than or equal to\
+  \ the minimum pairwise L2 distance between any two distinct points in the set.\n\
+  \n- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.\n- **Constraint**:\
+  \ For the set of points $S = \\{p_1, p_2, ..., p_k\\}$ where $p_i \\in \\mathbb{Z}^{11}$:\n\
+  \  $$\\max_{i} \\|p_i\\|_2 \\le \\min_{i \\neq j} \\|p_i - p_j\\|_2$$\n- **Objective**:\
+  \ Maximize the cardinality of the set, $k = |S|$.\n\nPERFORMANCE METRICS:\n1.  **num_points**:\
+  \ The number of points in the final set $S$. **This is the primary objective to\
+  \ maximize.**\n2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to\
+  \ achieve a ratio > 1.0.\n3.  **eval_time**: The total wall-clock time in seconds\
+  \ to generate the solution.\n\nCOMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:\n\
+  **Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn\n\
+  \n**Additional useful packages**:\n- **Optimization**: `deap` (evolutionary algorithms),\
+  \ `platypus` (multi-objective optimization)\n- **Geometric computing**: `shapely`\
+  \ (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)\n\
+  - **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)\n\
+  - **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)\n-\
+  \ **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)\n\nTECHNICAL\
+  \ REQUIREMENTS:\n- **Determinism & Reproducibility**: Your solution must be fully\
+  \ reproducible. If you use any stochastic algorithms (like simulated annealing or\
+  \ genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).\n\
+  - **Efficiency**: While secondary to correctness and the number of points, your\
+  \ algorithm should be reasonably efficient. Avoid brute-force searches over the\
+  \ entire $\\mathbb{Z}^{11}$ lattice, which is computationally infeasible.\n\n# PROMPT-BLOCK-START\n\
+  \nOPTIMIZATION STRATEGIES TO CONSIDER:\nTODO\n\nGEOMETRIC INSIGHTS & MATHEMATICAL\
+  \ FOUNDATIONS:\nTODO\n\n**Recommended implementation patterns**:\nTODO\n\n# PROMPT-BLOCK-END\n"

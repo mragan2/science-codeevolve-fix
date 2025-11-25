@@ -1,0 +1,65 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+*   Leverage `numpy` for vectorized operations on circle parameters (positions, radii) to efficiently compute objective and constraint functions, as well as their Jacobians. This minimizes Python loop overhead.
+*   Provide analytical gradients for the objective function and analytical Jacobians for constraints whenever possible. For gradient-based optimizers, this significantly improves performance, accuracy, and convergence compared to finite differencing.
+*   Employ parallel processing (e.g., `joblib`) for multi-start optimization runs to reduce overall execution time.
+*   Encapsulate initial guess generation, objective/constraint definitions, and the optimization loop into modular functions for clarity and easier experimentation with different strategies.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Multi-start Local Optimization**: Given the highly non-convex nature of the problem, a multi-start strategy with a local solver (like `SLSQP` as used in `scipy.optimize.minimize`) is crucial to explore different basins of attraction. Diversify initial guesses effectively, potentially using both random and structured (e.g., grid-based with jitter) approaches.
+*   **Global Optimization Algorithms**:
+    *   **Basin Hopping**: `scipy.optimize.basinhopping` is specifically designed to find global minima of functions with many local minima. It combines a global stepping algorithm with local minimization, making it a strong candidate for this problem.
+    *   **Evolutionary Algorithms (EAs)**: Libraries like `deap` or `platypus` are well-suited for complex, non-convex optimization problems. EAs can maintain a population of solutions, potentially exploring the search space more broadly and escaping local optima more effectively than purely gradient-based methods.
+    *   **Simulated Annealing**: Another metaheuristic for global optimization, which can escape local optima by occasionally accepting worse solutions based on a probability function.
+*   **Hybrid Approaches**: A common and often effective strategy is to combine a global search method (e.g., EAs or Basin Hopping) to find promising regions of the search space, followed by a high-precision local optimizer (like `SLSQP`) for fine-tuning the solution to high accuracy.
+*   **Physics-based Simulation**: Consider using a physics engine (e.g., `pymunk`) to simulate repulsive forces between circles and attractive forces towards the center or boundaries. This can be a very effective method for generating good initial configurations that are close to optimal, or even as an iterative optimization method itself, especially for packing problems.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Close Packing Principles**: Optimal circle packing often involves local hexagonal arrangements, especially when many circles are present and not heavily constrained by boundaries. The optimal solution for 32 circles will likely exhibit complex symmetries and intricate interactions with the unit square boundaries.
+*   **"Rattlers"**: In some packing problems, circles can become "rattlers" – circles that are not tightly constrained by their neighbors or boundaries and can move freely without violating constraints. Optimal packings usually minimize or eliminate rattlers to maximize overall density (sum of radii).
+*   **Voronoi Diagrams / Delaunay Triangulations**: These geometric structures can provide insights into the arrangement of circle centers and the distribution of empty space. While not directly an optimization method, they can inform initial guess generation (e.g., placing circles in large Voronoi cells) or aid in the analysis of a found solution.
+*   **Non-convexity**: The non-overlap constraints (distance squared minus sum of radii squared) introduce significant non-convexity, meaning there are many local optima. This mathematical property strongly reinforces the need for robust global optimization strategies.
+
+VALIDATION FRAMEWORK:
+*   **Rigorous Constraint Verification**: After optimization, always perform a final, explicit check of all containment and non-overlap constraints with a strict numerical tolerance (e.g., `1e-7` or `1e-8`) to ensure the solution's validity. Ensure `g(x) >= 0` for all constraints.
+*   **Numerical Stability**: Be mindful of floating-point precision issues, especially when dealing with very small radii or distances close to zero. Epsilon values in constraints and objective function tolerances should be chosen carefully.
+*   **Check for "Rattlers"**: A solution with "rattlers" (circles that can be perturbed without violating constraints) might indicate a sub-optimal local minimum. While difficult to detect programmatically, this concept helps in evaluating the quality of a found solution.
+*   **Boundary Conditions**: Pay close attention to circles touching the boundaries of the unit square. Optimal solutions often involve many circles making contact with the square's edges or corners.
+=======
+
+# PROMPT-BLOCK-END
+    

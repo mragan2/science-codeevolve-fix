@@ -1,0 +1,65 @@
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+SETTING:
+You are an expert in discrete geometry, high-dimensional lattice theory, and combinatorial optimization. Your task is to find a maximal set of points satisfying specific geometric constraints.
+
+PROBLEM CONTEXT:
+Let $S = \{p_1, p_2, \dots, p_k\}$ be a set of $k$ points in $\mathbb{Z}^{11}$, meaning each point $p_i$ is an 11-dimensional vector with integral coordinates.
+We define two critical metrics for this set:
+1.  **Maximum Norm ($N_{max}$)**: The largest Euclidean norm among all points in $S$.
+    $N_{max} = \max_{p \in S} ||p||_2$, where $||p||_2 = \sqrt{\sum_{j=1}^{11} p_j^2}$.
+2.  **Minimum Pairwise Distance ($D_{min}$)**: The smallest Euclidean distance between any two distinct points in $S$.
+    $D_{min} = \min_{p_i, p_j \in S, i \neq j} ||p_i - p_j||_2$, where $||p_i - p_j||_2 = \sqrt{\sum_{l=1}^{11} (p_{il} - p_{jl})^2}$.
+
+The objective is to construct a set $S$ that maximizes $k$ (the number of points), subject to the strict geometric constraint:
+$N_{max} < D_{min}$
+
+This problem challenges the limits of point packing under very tight conditions, particularly in high dimensions with integral coordinates. The target `num_points` (593) suggests a specific, non-trivial construction.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Implications of the Constraint ($N_{max} < D_{min}$)**: This is a very strong condition.
+    *   It implies that the origin $(0, \dots, 0)$ generally cannot be part of $S$ if $|S| > 1$, as its inclusion would drastically reduce $D_{min}$ to the norm of the closest point, making it difficult to satisfy the inequality.
+    *   It is highly recommended that all points in the optimal set have the *same* minimal possible squared Euclidean norm, $R^2$. In this case, $N_{max} = \sqrt{R^2}$, and the condition becomes $\sqrt{R^2} < D_{min}$. Given integer coordinates, $D_{min}^2$ must be an integer, so this implies $D_{min}^2 \ge R^2 + 1$.
+2.  **Lattice Structures & Codes - Direct Construction**: Given the integral coordinate constraint and high dimensionality, optimal configurations often arise from well-known high-dimensional lattices or error-correcting codes, or specific "layers" within them.
+    *   Explore constructions related to fundamental lattices such as $D_{11}$, $E_8$, or other dense lattices, and their derived codes. These structures are known for having points with specific norm and distance properties.
+    *   The problem is a variant of finding "spherical codes" or "constant weight codes" for integer points in Euclidean space, where the "radius" of the code must be strictly less than its minimum distance.
+3.  **Known Results - The Specific Target (593 points)**: The target `num_points` (593) is a highly specific value that *strongly suggests a known, direct mathematical construction* from discrete mathematics or coding theory literature for 11 dimensions under these exact constraints. It is highly unlikely that a generic greedy selection or heuristic search on simple candidate sets will yield this specific optimal number of points.
+    *   The AI is expected to identify and implement this specific, known construction. This is the primary avenue for achieving the benchmark.
+    *   Focus on finding a deterministic construction that directly yields 593 points, rather than relying on iterative selection from a larger candidate pool.
+4.  **Heuristic Search (Secondary)**: While brute-force over $\mathbb{Z}^{11}$ is infeasible, intelligent enumeration and filtering of candidate points can be part of a heuristic approach. However, given the specific target of 593 points, a heuristic method like local search or genetic algorithms should only be considered if a direct construction cannot be identified, and even then, ensure reproducibility with a fixed random seed.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Euclidean Geometry**: The problem relies on standard Euclidean norm and distance.
+2.  **Integer Lattices**: Points with integer coordinates form a lattice. Understanding the properties of points on such lattices (e.g., shortest vectors, packing density) is crucial.
+3.  **Symmetry**: Exploiting symmetries of the 11-dimensional space and the integer lattice can significantly reduce the search space and simplify construction. For example, if a point $(x_1, \dots, x_{11})$ is in $S$, permutations of its coordinates or sign changes might also be in $S$.
+4.  **The "Kissing Number" Connection**: Although not the standard kissing number problem, the function name and problem context are related to finding efficient packings or codes in high dimensions. The condition $N_{max} < D_{min}$ creates a highly constrained version of such problems, where the goal is to maximize the number of points in such a "code."
+
+**Recommended implementation patterns**:
+1.  **Numpy for Vector Operations**: Use `numpy` extensively for efficient array manipulations, norm calculations (`np.linalg.norm`), and coordinate generation.
+2.  **Scipy for Distances**: `scipy.spatial.distance.cdist` is highly efficient for computing pairwise distances between sets of points.
+3.  **Candidate Generation**: Systematically generate candidate points with small squared integer norms. For example, iterate through coordinate patterns like $(\pm a, \pm b, \dots)$ and their permutations.
+4.  **Filtering and Validation**: Implement robust functions to check the $N_{max} < D_{min}$ condition for any given set of points.
+5.  **Modular Design**: Break down the problem into smaller functions (e.g., `generate_candidates`, `check_condition`, `maximize_points`).
+6.  **Avoid Redundancy**: Ensure the generated points are unique.
+7.  **Performance Considerations**: For a target of 593 points, an algorithm that is better than exponential in the number of candidate points is required. Vectorized numpy operations are key.
+
+# PROMPT-BLOCK-END

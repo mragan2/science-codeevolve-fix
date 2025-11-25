@@ -1,0 +1,70 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+- **Data Representation**: Represent the `n` circles as a 1D `numpy` array `x` of shape `(3 * n,)` where `x = [x1, y1, r1, x2, y2, r2, ..., xn, yn, rn]`. This flat array format is convenient for `scipy.optimize` solvers.
+- **Objective Function**: Define an objective function `f(x)` that returns the negative sum of radii (`-np.sum(x[2::3])`) since `scipy.optimize.minimize` performs minimization.
+- **Constraint Handling**:
+    - **Bounds**: Define `bounds` for `x, y, r` for each circle. For `x_i, y_i`, these bounds are `[r_i, 1-r_i]`. For `r_i`, `[0, 0.5]`. Note that `x_i, y_i` bounds depend on `r_i`, which can be handled by carefully constructed `scipy.optimize.Bounds` or by incorporating them into inequality constraints.
+    - **Non-overlap and Containment**: Formulate these as inequality constraints `g(x) >= 0`. Each non-overlap constraint is `distance_ij - (r_i + r_j) >= 0`. Each boundary containment constraint is `x_i - r_i >= 0`, `1 - r_i - x_i >= 0`, `y_i - r_i >= 0`, `1 - r_i - y_i >= 0`. These can be passed to `scipy.optimize.minimize` as a list of `scipy.optimize.LinearConstraint` or `scipy.optimize.NonlinearConstraint` objects.
+- **Optimization Framework**: Leverage `scipy.optimize` for its robust set of solvers. Consider `scipy.optimize.minimize` with methods like `SLSQP` for local optimization with constraints, or global optimizers like `dual_annealing` or `basinhopping` for better exploration of the search space.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Global Optimization**: The problem is highly non-convex with many local optima. Pure local search (e.g., `SLSQP` from a single starting point) is unlikely to find the global maximum.
+    - **`scipy.optimize.dual_annealing`**: This is a robust global optimization algorithm well-suited for problems with many local minima. It requires bounds for variables and an objective function. Non-overlap and containment constraints can be incorporated as penalty terms into the objective function (making it an unconstrained problem for `dual_annealing`) or handled by a local minimizer called by `dual_annealing` (e.g., `L-BFGS-B` with bounds).
+    - **`scipy.optimize.basinhopping`**: Another global optimization strategy that combines a local optimizer with random "hops" to escape local minima.
+- **Initialization**: Since global optimization can be computationally intensive, a good initial guess can accelerate convergence.
+    - **Random Initialization**: Generate `x, y, r` randomly within valid bounds.
+    - **Grid-based Initialization**: Place circles in a grid-like pattern, possibly with small random perturbations.
+    - **Multi-start Optimization**: Run a local optimizer multiple times from different random initial points and pick the best result.
+- **Penalty Methods**: For non-overlap and boundary constraints, a common approach is to add large penalty terms to the objective function if constraints are violated. For example, if `distance_ij < r_i + r_j`, add `K * (r_i + r_j - distance_ij)^2` to the objective. This transforms a constrained problem into an unconstrained one, suitable for methods like `dual_annealing` or `L-BFGS-B` (if bounds are strictly adhered to).
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **Non-convexity**: The problem of maximizing the sum of radii of non-overlapping circles within a square is known to be highly non-convex due to the non-linear, non-overlap constraints. This implies that standard gradient-based local optimization methods will easily get stuck in sub-optimal local minima. Global optimization techniques are essential.
+- **Jammed Configurations**: Optimal (and many local optima) solutions are often "jammed," meaning circles are touching each other or the boundaries of the square. This property can sometimes be exploited in specialized algorithms but also makes it challenging for optimizers to navigate.
+- **Scaling**: The number of pairwise non-overlap constraints is `N * (N-1) / 2`. For `N=32`, this is `32 * 31 / 2 = 496` constraints. Efficient calculation of these distances is important (e.g., using `scipy.spatial.distance.pdist`).
+- **Variable Radii**: Unlike packing identical circles, here radii can vary. This adds another dimension to the search space and means optimal configurations are generally less symmetrical. Often, a few larger circles will be surrounded by smaller ones filling the interstitial spaces.
+- **Connection to "Maximum Density Packing"**: While the objective is sum of radii, the problem shares characteristics with dense packing problems, where efficient space utilization is key.
+
+VALIDATION FRAMEWORK:
+- **Constraint Checker Function**: Implement a separate helper function, `validate_circles(circles_array: np.ndarray, square_size: float = 1.0, tolerance: float = 1e-6) -> tuple[bool, dict]`, that takes the `(x,y,r)` array of circles and checks *all* constraints:
+    - **Containment**: For each circle `i`: `r_i <= x_i <= square_size - r_i` and `r_i <= y_i <= square_size - r_i`.
+    - **Non-overlap**: For each distinct pair `(i, j)`: `√[(x_i-x_j)² + (y_i-y_j)²] >= r_i + r_j`.
+    - The function should return `True` if all constraints are met within the given `tolerance`, and `False` otherwise. It should also return a dictionary detailing which constraints were violated and by how much, for debugging purposes.
+- **Objective Calculation**: The `sum_radii` metric should be precisely calculated as `np.sum(circles_array[:, 2])`.
+- **Reporting**: The final solution should always be verified using this `validate_circles` function. The `sum_radii` should only be considered valid and reported if all constraints pass. If constraints are violated, the function should either return an error or report a very low (e.g., 0.0) `sum_radii` to indicate an invalid configuration.
+
+# PROMPT-BLOCK-END
+    

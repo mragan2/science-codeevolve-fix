@@ -1,0 +1,92 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+
+*   **Representing Circles**: Use a NumPy array of shape `(N, 3)` where `N` is the number of circles (32 in this case), and each row is `[x, y, r]`. This allows for efficient vectorized operations.
+*   **Distance Calculations**: Leverage `scipy.spatial.distance.cdist` or `np.linalg.norm` for efficient pairwise distance computations between circle centers, avoiding explicit nested loops.
+*   **Constraint Handling**:
+    *   **Penalty Methods**: For evolutionary algorithms or other metaheuristics, incorporate constraint violations (overlap, out-of-bounds) directly into the objective function as penalties. This transforms a constrained problem into an unconstrained one, where the optimizer minimizes penalties while maximizing radii. **Crucially, the penalty coefficients (e.g., C1 and C2) must be carefully tuned. If too low, the optimizer may converge to infeasible solutions (e.g., overlaps), which must be strictly avoided for the final output, as demonstrated by previous failures where penalties of `1000` were insufficient. If too high, the optimizer may struggle to find feasible regions or converge precisely to the boundary due to excessively steep gradients, especially with quadratic penalties. For initial exploration, moderate penalty coefficients (e.g., in the range of 100-500) are often beneficial. However, for the *final refinement* (especially with `polish=True` or a dedicated local optimization), consider increasing penalties significantly (e.g., 10,000 or more) or, preferably, using explicit constraint functions to guarantee strict feasibility. The functional form of penalties can also matter; for example, using `max(0, violation)**2` can create a smoother, more gradual penalty landscape than a linear `max(0, violation)`. While quadratic penalties are excellent for providing smooth gradients, combining them with very high coefficients can still create extremely steep gradients near the boundary, which can challenge local optimizers in finding exact feasible solutions within floating-point precision. This often necessitates a final, dedicated constraint-aware local optimization step.**
+    *   **Explicit Constraints for `scipy.optimize`**: When using `scipy.optimize.minimize`, define constraint functions explicitly (e.g., `{'type': 'ineq', 'fun': lambda circles: ...}`).
+    *   **Feasibility Repair**: For evolutionary algorithms, after mutation or crossover, consider repair mechanisms that slightly adjust circle positions or radii to reduce constraint violations. **This is particularly crucial as a *final post-processing step* to strictly enforce constraints after the primary optimization, especially if the optimizer relies on penalty functions which might leave tiny violations. Such a repair could involve a very small, short local optimization run with explicit constraints, or direct projection methods.**
+*   **Initialization**: Start with a diverse population of circle arrangements for global optimizers. For `differential_evolution`, the `init='latinhypercube'` option is often effective. Consider starting with very small radii (e.g., initial bounds for `r` could be `(0, 0.05)` or even `(0, 0.01)` initially, allowing them to grow) to help the optimizer find feasible configurations before expanding. A grid-like initial arrangement, or even a simple greedy placement can also serve as good starting points.
+*   **Modular Design**: Separate concerns like objective function calculation, constraint checking, and optimization logic into distinct functions for clarity and maintainability.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+
+*   **Evolutionary Algorithms (EAs)**: Given the non-convex, high-dimensional, and often multimodal nature of circle packing problems, EAs (e.g., Genetic Algorithms, Differential Evolution) are highly suitable. The `deap` library is an excellent choice.
+    *   **Encoding**: Represent the entire configuration of 32 circles as a single long vector of 32 * 3 = 96 floating-point numbers `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]`.
+    *   **Fitness Function**: Design a fitness function that combines the primary objective (sum of radii) with penalties for constraint violations (out-of-bounds, overlaps). A common approach is `fitness = sum_radii - C1 * sum_overlap_violations - C2 * sum_boundary_violations`, where C1 and C2 are penalty coefficients.
+    *   **Operators**: Experiment with different selection, crossover, and mutation operators. Mutation should consider the geometric context (e.g., slight perturbations to x, y, r). **For `differential_evolution`, carefully tune `maxiter` and `popsize`. Note that `popsize` in `scipy.optimize.differential_evolution` is a *multiplier* for the number of dimensions (i.e., actual population size = `popsize * N_DIMENSIONS`). For `N=32` circles (96 dimensions), the default `popsize=15` results in a large population of 1440 individuals, which can be computationally expensive. While a larger population increases search diversity, it significantly increases `eval_time`. Given the time constraints, consider starting with a *lower* `popsize` (e.g., 5-10) to reduce computation per generation. When `polish=True` is enabled, `maxiter` can often be *reduced* significantly (e.g., to 200-800 iterations). The polishing step (local optimization) is highly effective at refining solutions found by a less exhaustive global search, thus allowing for a faster overall runtime without sacrificing too much accuracy. The goal is to find a good compromise between global exploration (controlled by `popsize` and `maxiter`) and local refinement (`polish=True`) to meet `eval_time` limits.**
+*   **Global Optimization with `scipy.optimize`**:
+    *   **Differential Evolution**: Can be accessed via `scipy.optimize.differential_evolution`. This is often a strong candidate for global search. **For best results, it is highly recommended to enable the `polish=True` option, which applies a local optimization algorithm (like L-BFGS-B) to the best solution found by DE. This hybrid approach often yields significantly better accuracy by refining the global search result. While `polish=True` is effective, it still operates on the penalty-based objective function. For *guaranteed strict feasibility* of the final solution, it is often necessary to perform a *separate, dedicated local optimization step* using `scipy.optimize.minimize` (e.g., 'SLSQP' or 'COBYLA') on the best result from `differential_evolution`. Crucially, this final local optimization should leverage *explicit constraint functions* (e.g., `scipy.optimize.NonlinearConstraint` or `scipy.optimize.LinearConstraint`) for containment and non-overlap, as these are more robust than penalty methods alone for ensuring strict adherence to constraints.
+        *   **`workers` and `updating`**: Be aware that when `workers` is set (e.g., `workers=-1`), `scipy.optimize.differential_evolution` internally switches its `updating` strategy from the default `immediate` to `deferred`. This is usually acceptable but can sometimes affect convergence behavior; if specific properties are critical, explicitly setting `updating='deferred'` is an option.**
+    *   **Basin Hopping**: A robust global optimization algorithm that combines local minimization with random jumps to escape local minima.
+    *   **Dual Annealing**: Another stochastic global optimization algorithm designed for global search.
+*   **Local Optimization with Multiple Restarts**: Use `scipy.optimize.minimize` (e.g., methods like 'SLSQP', 'L-BFGS-B', 'COBYLA') starting from many different random or heuristically generated initial configurations. This helps explore the multimodal landscape.
+*   **Physics-based Simulation (e.g., `pymunk`)**: Treat circles as physical bodies with repulsive forces when overlapping. Gradually increase radii while allowing the system to settle, potentially adding attractive forces to keep them within bounds. This can be a good heuristic for generating initial configurations that are locally optimal or close to it.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+
+*   **NP-Hardness**: Circle packing in a square is a known NP-hard problem. This means that for a general number of circles (N), finding the *absolute* global optimum is computationally intractable, and numerical optimization or approximation methods are necessary. The benchmark value represents a highly optimized, but not necessarily proven optimal, solution.
+*   **Local Optima**: The objective function landscape (sum of radii) is highly rugged and multimodal, meaning there are many local optima. This reinforces the need for global optimization algorithms (EAs, SA, Basin Hopping) that can explore the search space effectively rather than getting stuck in the first local peak found.
+*   **Contact Graph**: Optimal packings often form a 'contact graph' where circles touch each other. Maximizing radii tends to push circles into tight configurations where many circles are in contact with their neighbors or the boundaries.
+*   **Symmetry**: For certain numbers of circles (N), optimal packings often exhibit rotational or reflective symmetries. While N=32 might not have obvious simple symmetries, exploring this can sometimes inform the search space or specific sub-problems.
+*   **Boundary Effects**: Circles at the edges and corners of the unit square are subject to different constraints than interior circles. Their positions and maximum radii are heavily influenced by proximity to one, two, or three boundaries.
+*   **Voronoi Diagrams / Delaunay Triangulation**: These concepts can be useful for analyzing the spatial relationships of circles in a packing, potentially informing local adjustments or validation, though less directly for generating the packing itself.
+
+VALIDATION FRAMEWORK:
+
+The generated solution `circles` (a `(32,3)` array) must be validated against all constraints. A function `validate_packing(circles, tolerance=1e-6)` should be implemented.
+
+*   **Objective Function Calculation**: Calculate `sum_radii = np.sum(circles[:, 2])`.
+*   **Containment Check**: For each circle `i` with `(x_i, y_i, r_i)`:
+    *   `r_i >= 0 - tolerance` (radii must be non-negative)
+    *   `x_i - r_i >= 0 - tolerance` and `x_i + r_i <= 1 + tolerance`
+    *   `y_i - r_i >= 0 - tolerance` and `y_i + r_i <= 1 + tolerance`
+    *   Accumulate any violations (e.g., `max(0, -(x_i - r_i))`, `max(0, (x_i + r_i) - 1)`).
+*   **Non-Overlap Check**: For every unique pair of circles `(i, j)` where `i != j`:
+    *   Calculate the squared Euclidean distance `d_sq = (x_i - x_j)^2 + (y_i - y_j)^2`.
+    *   Calculate the squared sum of radii `r_sum_sq = (r_i + r_j)^2`.
+    *   Check `d_sq >= r_sum_sq - tolerance`.
+    *   Accumulate any overlaps (e.g., `max(0, (r_i + r_j) - np.sqrt(d_sq))`).
+*   **Reporting**: The validation framework should return:
+    *   A boolean indicating overall feasibility (True if all constraints are met within `tolerance`).
+    *   The total sum of radii.
+    *   A detailed report of any violations, including the type of violation (containment, overlap) and its magnitude. This is crucial for debugging and for constructing penalty functions.
+*   **Visualization**: While not part of the code generation, visualizing the resulting circle packing (e.g., using `matplotlib`) is highly recommended for qualitative assessment and debugging.
+
+# PROMPT-BLOCK-END
+    

@@ -1,0 +1,87 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+The second autocorrelation inequality is a fundamental result in harmonic analysis, related to uncertainty principles and the behavior of Fourier transforms. The constant C₂ represents a maximal value for the ratio `||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})`. For non-negative functions, a key simplification `||f ★ f||₁ = (∫f)²` holds, leading to the objective of maximizing `C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})`. The known upper bound for C₂ is 1. The current best numerical lower bound is approximately 0.8962799441554086, achieved by a function resembling a "tent" or piecewise-linear function.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Function Representation & Support Optimization**: Instead of directly optimizing raw function values, consider parameterizing `f(x)` for smoother and potentially more optimal solutions. This can lead to better convergence and higher C₂ values. Crucially, also consider optimizing the *support length* `L` of the function `f`. The optimal support length is not necessarily 1.0.
+    *   **Piecewise Linear Functions**: Represent `f` as a series of connected line segments over an interval `[0, L]`. Optimize the y-values at fixed x-intervals (knots) or even optimize knot positions, *and* optimize `L`. This aligns well with the known best lower bound functions.
+    *   **Sum of Basis Functions**: E.g., a sum of Gaussian functions `f(x) = Σ A_i * exp(-(x - μ_i)² / (2σ_i)²)`. Optimize amplitudes (A_i), means (μ_i), and standard deviations (σ_i), *and* potentially the overall scale or extent of the function's support implicitly or explicitly. This offers smoothness and flexibility.
+    *   **Neural Network**: Use a small Multi-Layer Perceptron (MLP) to output `f(x)` given `x`. This provides high flexibility but might be harder to constrain, and `L` would need to be managed carefully.
+2.  **Numerical Integration Consistency**: It is crucial to use a consistent and accurate numerical integration method for all integral terms.
+    *   **Discretization Domain**: Define `f` over a finite interval, e.g., `[0, L]`, discretized into `N` points. The convolution `g = f ★ f` will then naturally extend over `[0, 2L]` and will have `M = 2N-1` points (or `2N` if padded for FFT).
+    *   **Step Size `h`**: If `N` points are used for `f` on `[0, L]`, then `h_f = L / (N - 1)`. For convolution `g = f ★ f` on `[0, 2L]` with `M` points, `h_conv = 2L / (M - 1)`. Choose `L` appropriately (e.g., `L=1` for a unit interval).
+    *   **Integral Calculations**:
+        *   `∫f`: Calculate `integral_f = h_f * (0.5 * f_values[0] + jnp.sum(f_values[1:-1]) + 0.5 * f_values[-1])` (Trapezoidal rule).
+        *   **CRITICAL**: The denominator for C₂ requires `(∫f)²`. Ensure this term, `integral_f_squared = integral_f ** 2`, is correctly computed and used.
+        *   `||g||₂²`: For `g = f ★ f`, calculate `integral_g_squared`. Since `f` is represented as piecewise linear, `g = f ★ f` will be piecewise cubic, and `g²` will be piecewise degree 6. The trapezoidal rule for `g²` (i.e., `h_conv * (0.5 * g_values[0]**2 + jnp.sum(g_values[1:-1]**2) + 0.5 * g_values[-1]**2)`) can be used, but for higher accuracy, consider using a higher-order quadrature rule like Simpson's rule, which is more appropriate for integrating piecewise polynomials of higher degree. Ensure the chosen method is differentiable.
+        *   `||g||_{∞}`: `jnp.max(g_values)`.
+3.  **Constraints**:
+    *   `f(x) ≥ 0`: Apply `jax.nn.relu` or `jax.nn.softplus` to the output of `f`'s representation (e.g., raw neuron output, or `f_values`).
+    *   `∫f > 0`: This should naturally be handled if `f` is non-negative and not identically zero.
+4.  **Optimization Objective**: Minimize a loss function, typically `-C₂ + regularization_terms`. The primary goal is to maximize C₂, so the reported `loss` metric in the final output should be `-C₂` (without regularization, as regularization is an optimization aid, not part of the constant definition).
+5.  **Optimizer**: Adam or other adaptive optimizers with a learning rate schedule (e.g., cosine decay with warmup) are generally effective.
+
+**Recommended implementation patterns**:
+1.  **JAX for Performance**: Leverage `jax.jit` for compiling functions to XLA for significant speedups. Define a `train_step` function and `jit` it. For maximum numerical precision in constant discovery, ensure `jax.config.update("jax_enable_x64", True)` is set at the beginning of the script to enable 64-bit floating point precision.
+2.  **FFT for Convolution**: Use `jax.numpy.fft.fft` and `jax.numpy.fft.ifft` for efficient convolution. Remember to zero-pad `f` to a length of at least `2N-1` (or `2N` for power-of-2 efficiency) to perform linear convolution correctly using circular convolution.
+3.  **Numerical Stability**:
+    *   Add a small epsilon (e.g., `1e-9`) to denominators (`integral_f_squared` and `norm_inf`) to prevent division by zero, especially during early optimization steps.
+    *   Ensure `f_values` remain finite; consider `jnp.clip` if necessary, though `relu` generally helps.
+    *   When optimizing the support length `L`, ensure it remains positive and non-zero (e.g., `jnp.maximum(L_param, 1e-4)`) to avoid division by zero in step size calculations and maintain a valid function domain.
+4.  **Reproducibility**: Strictly adhere to setting `jax.random.PRNGKey(42)` and `numpy.random.seed(42)`.
+5.  **Hyperparameter Tuning for Groundbreaking C₂**: To push the C₂ bound beyond current limits, systematic hyperparameter tuning is essential.
+    *   **Resolution (`num_intervals`)**: Higher `num_intervals` (N) directly translates to finer discretization and potentially more accurate integral computations and C₂ values. While increasing `N` increases computational cost (FFT complexity is `O(N log N)`), it is often necessary to achieve groundbreaking results. Consider starting with `N=501` and systematically increasing it (e.g., `N=1001`, `N=2001`, `N=4096`) if the C₂ value plateaus. The optimal `N` often corresponds to a power of 2 for FFT efficiency.
+    *   **Support Length (`L`)**: If `L` is optimized, its initial value and bounds (if any) can influence convergence. The final optimized `L` is a critical part of the discovered function.
+    *   **Optimization Steps (`num_steps`)**: Ensure `num_steps` is sufficient for full convergence. Monitor the loss curve; if it's still decreasing significantly at the end, more steps are needed.
+    *   **Learning Rate (`learning_rate`)**: Experiment with the learning rate and its schedule. A well-tuned schedule with warmup and decay is crucial.
+    *   **Regularization Strength (`lambda_reg`)**: Tune `lambda_reg` carefully. Too high can over-smooth the function, too low might not prevent oscillations.
+6.  **Regularization (CRITICAL for high-quality solutions)**: To encourage smoother functions, prevent highly oscillatory local minima, and guide the optimizer towards the known smooth optimal solutions, it is highly recommended to add a regularization term to the loss function. A particularly effective approach is L2 regularization on the finite differences between adjacent points (`lambda_reg * jnp.sum(jnp.diff(f_values)**2)`). This explicitly penalizes sharp changes in the function, promoting smoothness and potentially leading to higher C₂ values. Introduce a new hyperparameter `lambda_reg` for the regularization strength, which should be tuned.
+
+# PROMPT-BLOCK-END

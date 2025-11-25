@@ -1,0 +1,92 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Lattice-Based Search**: Systematically search for optimal subsets of points from known dense lattices in 11 dimensions, such as the root lattices $A_{11}$ and $D_{11}$. These provide highly structured initial candidates.
+- **Stochastic & Heuristic Methods**:
+    - **Evolutionary Algorithms**: Evolve a population of point sets. Use mutation operators (e.g., perturbing a point to a nearby integer coordinate, adding/removing a point) and crossover operators (e.g., combining subsets from two parent solutions).
+    - **Simulated Annealing**: Start with an initial configuration (e.g., from a lattice) and iteratively modify it. Define an energy function that rewards a higher point count and heavily penalizes any violation of the geometric constraint.
+    - **Greedy Constructive Algorithms**: Start with an empty set. Iteratively add the integer point that best satisfies some heuristic (e.g., has the lowest norm, or leaves the most "space" for future points) while maintaining the core constraint.
+- **Local Search & Refinement**:
+    - Begin with a high-quality initial guess (a "seed" configuration) and attempt to improve it by making small, local changes.
+    - **Tabu Search**: Prevent cycling by keeping a short-term memory of recently made moves.
+- **Hybrid Approaches**: Combine the strengths of different methods. For instance, use a lattice to generate a strong initial seed, then apply a simulated annealing or evolutionary algorithm to refine and improve upon it. This mirrors the successful strategy of AlphaEvolve.
+
+INITIAL ALGORITHM STRATEGY:
+Given the complexity and the need to achieve a high number of points, your **primary task is to implement a robust Greedy Constructive Algorithm** as your initial approach. This will serve as a foundational strategy that can be further refined.
+
+Here's a detailed plan for your initial implementation:
+
+1.  **Initialization**: Start with an empty set of points, `S = []`.
+
+2.  **Candidate Point Generation**: To avoid brute-force over $\mathbb{Z}^{11}$, systematically generate candidate integer points for addition.
+    *   Iterate through integer coordinates `(x_1, ..., x_{11})` such that `sum(abs(x_i))` (L1 norm) is small. A practical approach is to generate all unique integer points `p` where `||p||_1 <= C` for increasing values of `C` (e.g., `C = 1, 2, 3, ...`). This ensures you explore points close to the origin first.
+    *   For each generated point, include its permutations and sign changes (e.g., if `(1,0,0...)` is a candidate, so is `(-1,0,0...)` and `(0,1,0...)`).
+    *   Store these candidates in a list and sort them by their L2 norm (or squared L2 norm) to prioritize points closer to the origin.
+
+3.  **Greedy Selection Loop**:
+    *   Iteratively try to add new points to the current set `S` from your sorted list of candidates.
+    *   For each candidate point `p_candidate`:
+        *   **Preliminary Check**: If `p_candidate` is already in `S`, skip it.
+        *   **Constraint Check**: Evaluate if adding `p_candidate` to `S` violates the geometric constraint.
+            *   Let `S_temp = S + [p_candidate]`.
+            *   Calculate `N_max_sq = max_{p in S_temp} ||p||_2^2`.
+            *   Calculate `D_min_sq = min_{p_i, p_j in S_temp, i \neq j} ||p_i - p_j||_2^2`.
+            *   If `N_max_sq <= D_min_sq`, then `p_candidate` is a valid point to add.
+        *   **Add Point**: If valid, add `p_candidate` to `S`. Crucially, after adding a point, update the global `N_max_sq` and `D_min_sq` for the entire set `S`. Then, continue iterating through the *remaining* candidate points.
+
+4.  **Symmetry Exploitation (Important for scaling)**:
+    *   When a `p_candidate` is successfully added to `S`, immediately generate all its unique permutations and sign changes (e.g., `(-p_1, p_2, ..., p_{11})`, `(p_2, p_1, ..., p_{11})`).
+    *   For each symmetric variant `p_sym`:
+        *   Check if `p_sym` is already in `S`.
+        *   If not, perform the full constraint check as described in step 3. If valid, add `p_sym` to `S`. This can significantly boost `num_points` in early stages.
+
+5.  **Termination**: Continue the greedy selection loop (steps 2-4) until no more valid points can be added from the candidate pool, or until a predefined iteration limit is reached.
+
+**Efficient Constraint Checking (Re-emphasized)**:
+*   As highlighted in "Recommended implementation patterns", use **squared L2 norms** for all calculations (`||v||_2^2 = sum(v_i^2)`) to avoid costly square root operations. The constraint is `max_i ||p_i||_2^2 <= min_{i \neq j} ||p_i - p_j||_2^2`.
+*   Use `numpy` for vectorized calculations of norms and pairwise squared distances.
+*   When adding a new point `p_new`, you only need to check its squared norm against the current `N_max_sq` and its squared distances to *all existing points* against the current `D_min_sq`. This avoids recomputing all pairwise distances from scratch for `D_min_sq`. Specifically, `D_min_sq` for the new set will be `min(current_D_min_sq, min_{p_existing in S} ||p_new - p_existing||_2^2)`.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **Kissing Number Problem**: The standard kissing number $k(n)$ is the maximum number of non-overlapping unit spheres that can touch a central unit sphere in $n$ dimensions. Your problem is a related but distinct packing problem within a hypersphere. The current best known bounds for the standard kissing number in 11D are $595 \le k(11) \le 870$. Your target of beating 593 is for this specific integer-constrained variant.
+- **Code Design Analogy**: This problem is equivalent to finding a spherical code within the integer lattice $\mathbb{Z}^{11}$. The points of $S$ can be viewed as codewords.
+- **Constraint Tightness**: An optimal solution will likely satisfy the constraint with near-equality, i.e., $\max \|p_i\|_2 \approx \min \|p_i - p_j\|_2$. Let this common value be $d$. The problem is then to pack as many integer points as possible inside a ball of radius $d$ such that they are separated by a distance of at least $d$.
+- **Symmetry**: Exploit symmetry to reduce the search space. If a point $p$ is in the set, consider adding permutations of its coordinates or sign changes (e.g., $(-p_1, p_2, ..., p_{11})$) if they also satisfy the constraints.
+
+**Recommended implementation patterns**:
+- **Vectorization**: Use `numpy` for all vector and matrix operations to maximize speed. The core constraint check can be implemented efficiently by computing a single pairwise distance matrix.
+- **Efficient Neighbor Search**: For iterative algorithms that add or move points, use a KD-tree to check for constraint violations with nearby points only, avoiding a full $O(k^2)$ check at every step.
+- **Integer Arithmetic**: Since all points are in $\mathbb{Z}^{11}$, their squared norms and squared distances will also be integers. Working with squared distances ($d^2$) avoids costly square root operations until the final comparison. Let $N^2_{max} = \max_i \|p_i\|_2^2$ and $D^2_{min} = \min_{i \neq j} \|p_i - p_j\|_2^2$. The constraint becomes $N^2_{max} \le D^2_{min}$.
+
+# PROMPT-BLOCK-END

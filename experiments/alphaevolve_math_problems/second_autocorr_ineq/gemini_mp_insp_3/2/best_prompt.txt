@@ -1,0 +1,93 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+The core problem is to maximize the constant C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞}).
+For non-negative functions f(x) ≥ 0, a critical simplification provided in the problem statement must be leveraged: **||f ★ f||₁ = (∫f)²**. This is because if f(x) ≥ 0, then (f ★ f)(x) ≥ 0, and ∫(f ★ f)(x) dx = (∫f(x) dx)². Implementing this simplification is crucial for accuracy and stability.
+
+**Function Discretization**:
+To numerically solve this on a computer, the continuous function `f: ℝ → ℝ` must be discretized.
+1.  **Domain**: We assume `f` has compact support. Due to the scale-invariance of C₂, we can normalize the domain of `f` to `[0, L_f]`. A common choice for `L_f` is `1.0`.
+2.  **Representation**: `f` is represented by `N` sampled values, `f_values = [f_0, f_1, ..., f_{N-1}]`, at equally spaced points `x_i = i * h_f` where `h_f = L_f / N`.
+3.  **Non-negativity**: The constraint `f(x) ≥ 0` must be enforced, typically by applying `jax.nn.relu` to the `f_values` during objective calculation.
+
+**Numerical Computations**:
+1.  **Integral of f (∫f)**: For discretized `f_values` over `[0, L_f]` with `N` points and step `h_f = L_f / N`, the integral can be approximated as `∫f ≈ h_f * jnp.sum(f_values)`.
+2.  **Convolution (f ★ f)**: The convolution `g = f ★ f` is defined over `[0, 2 * L_f]` and can be efficiently computed using the Fast Fourier Transform (FFT).
+    *   Pad `f_values` with zeros to a length `L_fft` which is at least `2 * N - 1` (the true length of linear convolution) and preferably a power of 2 for FFT efficiency.
+    *   Compute `jnp.fft.ifft(jnp.fft.fft(padded_f) * jnp.fft.fft(padded_f)).real`.
+    *   Extract the relevant `2 * N - 1` points from the result, let's call this `g_values`.
+    *   The step size for `g_values` is `h_g = (2 * L_f) / (2 * N - 1)`.
+3.  **Norms of g = f ★ f**:
+    *   **||g||₁**: This MUST be computed as `(∫f)²`, using the `integral_f` calculated above.
+    *   **||g||₂²**: For `g_values` (representing `g` on `[0, 2 * L_f]`) with step `h_g`, approximate `∫g² dx` using a more accurate numerical integration scheme like Simpson's rule for piecewise linear functions. If `g` is piecewise linear between `g_i` and `g_{i+1}` over an interval `h_g`, then `∫g² dx ≈ (h_g / 3) * (g_i² + g_i * g_{i+1} + g_{i+1}²)`. Sum this over all intervals.
+    *   **||g||_{∞}**: This is `jnp.max(g_values)` since `g` is non-negative.
+4.  **Target C₂**: The current best lower bound is `0.8962799441554086`. The goal is to exceed this value. Known functions achieving good bounds often have a triangular shape.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Objective Function**: The constant `C₂` is to be maximized. Therefore, the optimization loss should be `-C₂`.
+2.  **Gradient Descent**: Leverage JAX's `jax.grad` for automatic differentiation and an `optax` optimizer (e.g., Adam) for updating `f_values`.
+3.  **Learning Rate Scheduling**: Implement a learning rate schedule (e.g., `optax.warmup_cosine_decay_schedule`) to improve convergence.
+4.  **Hyperparameter Tuning**: Experiment with `num_intervals` (N), `learning_rate`, `num_steps`, and `warmup_steps`. Higher `N` can lead to better accuracy but increased computational cost.
+5.  **Initialization**: Initialize `f_values` with small positive random values. Consider initializing with a simple shape (e.g., a constant or a triangle) to provide a better starting point.
+6.  **Numerical Stability**: Ensure that intermediate calculations (especially in norms) avoid division by zero or extremely small numbers. The `∫f > 0` constraint ensures `||f ★ f||₁ > 0`.
+
+**Recommended implementation patterns**:
+1.  **JAX Ecosystem**:
+    *   Use `jax.numpy` for all array manipulations.
+    *   Decorate the `train_step` function with `jax.jit` for Just-In-Time compilation.
+    *   Use `jax.grad` for efficient gradient computation.
+    *   Manage random state using `jax.random.PRNGKey` for reproducibility.
+2.  **Modular Design**: Organize the code into a class (e.g., `C2Optimizer`) to encapsulate hyperparameters, state, and optimization logic.
+3.  **FFT for Convolution**:
+    *   Properly pad `f_values` for linear convolution approximation using `jnp.pad`.
+    *   The length of the convolution result should correspond to the `2 * N - 1` points over `[0, 2 * L_f]`.
+4.  **Norm Calculation Precision**: Pay close attention to the definition of `h_f` and `h_g` (step sizes for `f` and `g`) to ensure correct scaling in numerical integration.
+5.  **Reproducibility**: Explicitly set `numpy.random.seed(42)` and initialize `jax.random.PRNGKey(42)`.
+
+# PROMPT-BLOCK-END

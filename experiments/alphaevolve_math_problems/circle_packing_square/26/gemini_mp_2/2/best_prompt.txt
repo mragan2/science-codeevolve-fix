@@ -1,0 +1,78 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 26 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.6358627564136983
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 26 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.6358627564136983 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem is a challenging non-convex continuous optimization task, characterized by many local optima. Therefore, global optimization methods are highly recommended.
+
+*   **Evolutionary Algorithms (EAs)**: Genetic Algorithms (GAs) or Differential Evolution (DE) are particularly well-suited for exploring complex search spaces. Packages like `deap` or `platypus` provide robust frameworks.
+    *   Represent the solution as a vector of `(x1, y1, r1, ..., xN, yN, rN)`.
+    *   Use penalty functions to incorporate containment and non-overlap constraints into the fitness function, where violations reduce the overall fitness.
+*   **Simulated Annealing (SA)**: Another powerful metaheuristic for global search, effective in escaping local minima.
+*   **Hybrid Approaches**: Combine a global search (EA, SA) to find promising regions with a local optimizer (e.g., `scipy.optimize.minimize` with methods like SLSQP or L-BFGS-B) for fine-tuning the solution. Local optimizers require careful formulation of objective and constraint functions.
+*   **Physics-based Relaxation**: `pymunk` or custom force-based simulations can be used to generate initial configurations where circles repel each other and are attracted to the center, then bounded by the square. This can provide good starting points for more rigorous optimization.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Contact Graph Theory**: Optimal circle packings often involve a "contact graph" where circles touch each other and/or the boundaries of the square. Maximizing radii often implies maximizing these contact points.
+*   **Voronoi Diagrams / Delaunay Triangulation**: These computational geometry tools can help analyze the empty space and connectivity between circles, potentially guiding placement strategies or identifying areas for improvement.
+*   **Symmetry**: While N=26 might not yield a perfectly symmetrical global optimum, exploring symmetrical initial configurations or local symmetries can be beneficial. Many optimal packings exhibit some form of symmetry.
+*   **Hard Sphere Model**: The problem is analogous to the 2D hard sphere packing problem, where the goal is to arrange non-overlapping objects to maximize density within a container.
+*   **Constraint Formulation**:
+    *   **Containment**: For each circle `i` with `(xi, yi, ri)`: `ri <= xi <= 1-ri` and `ri <= yi <= 1-ri`.
+    *   **Non-overlap**: For any two distinct circles `i` and `j`: `(xi - xj)² + (yi - yj)² >= (ri + rj)²`. This is a non-linear inequality constraint.
+
+**Recommended implementation patterns:**
+*   **Solution Representation**: Represent the 26 circles as a flat NumPy array `[x1, y1, r1, x2, y2, r2, ..., x26, y26, r26]` for optimization, or as an `(N, 3)` array `[[x1, y1, r1], ..., [x26, y26, r26]]` for internal calculations and output.
+*   **Objective Function**: The primary objective is `sum(radii)`. When using penalty methods, define a comprehensive fitness function that combines `sum(radii)` with penalties for constraint violations (containment and overlap). For example, `fitness = sum(radii) - C * (sum(overlap_violations) + sum(containment_violations))`, where `C` is a large penalty coefficient.
+    *   **Crucial Note for Parallel Execution**: If utilizing optimizers that support parallel processing (e.g., `scipy.optimize.differential_evolution` with `workers > 1` or `workers = -1`), the objective function **MUST** be defined at the top-level of the module (not nested inside another function) or as a static method of a class. Nested functions cannot be pickled and passed to worker processes, which will result in an `AttributeError`.
+*   **Constraint Implementation**:
+    *   **Bounds**: Implement `0 < r_i <= 0.5` and `r_i <= x_i <= 1-r_i`, `r_i <= y_i <= 1-r_i` as explicit bounds for optimizers that support them (e.g., `scipy.optimize.minimize`).
+    *   **Non-overlap**: Calculate pairwise squared distances `dist_sq_ij = (x_i - x_j)² + (y_i - y_j)²` and compare with `(r_i + r_j)²`. Vectorize these calculations using NumPy for efficiency.
+*   **Initialization**: The choice of initial configurations is critical for non-convex problems.
+    *   Generate multiple random valid starting points (e.g., small circles placed randomly without overlap, then grow).
+    *   Consider grid-based or quasi-hexagonal initial arrangements.
+    *   Utilize physics-based relaxation to get non-overlapping initial states.
+*   **Performance with NumPy**: Leverage NumPy's vectorized operations for all geometric calculations (distances, constraint checks) to avoid slow Python loops.
+*   **Reproducibility**: Always use `np.random.seed()` when employing stochastic optimization methods to ensure consistent results across runs.
+
+VALIDATION FRAMEWORK:
+The generated solution (an `(N, 3)` NumPy array of `(x, y, r)`) must be validated against the problem constraints.
+*   **Number of circles**: Ensure exactly 26 circles.
+*   **Radius Positivity**: All `r_i` must be `> 0`.
+*   **Containment**: For each circle `i`, verify `0 <= x_i - r_i`, `x_i + r_i <= 1`, `0 <= y_i - r_i`, and `y_i + r_i <= 1`.
+*   **Non-overlap**: For every distinct pair of circles `i` and `j`, verify `(x_i - x_j)² + (y_i - y_j)² >= (r_i + r_j)²`. A small tolerance (e.g., `1e-9`) should be used for floating-point comparisons to account for numerical precision.
+*   A helper function `validate_solution(circles: np.ndarray) -> dict` that checks these conditions and returns a dictionary indicating validity and any violations would be valuable.
+
+# PROMPT-BLOCK-END
+    

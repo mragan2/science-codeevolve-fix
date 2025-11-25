@@ -1,0 +1,80 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+To simplify the problem and align with standard practices in the literature, we can normalize the function `f`.
+1.  **Normalization**: It is common and robust to assume `∫f(x) dx = 1`.
+    *   Since `f(x) ≥ 0`, it follows directly that its autoconvolution `(f ★ f)(x) ≥ 0` for all `x`. This simplifies `|f ★ f|` to `f ★ f`.
+    *   With the normalization `∫f(x) dx = 1`, the L1 norm of the convolution simplifies significantly: `||f ★ f||₁ = ∫(f ★ f)(x) dx = (∫f(x) dx)² = 1² = 1`.
+    *   Therefore, the objective function for C₂ simplifies to: `C₂ = ||f ★ f||₂² / ||f ★ f||_{∞}`. This form is often more stable for optimization.
+2.  **Function Domain**: Discretize `f` over a finite interval, for instance, `[0, L]`. A common choice for `L` is `1.0` or `2.0`.
+    *   If `f` is supported on `[0, L]`, then its autoconvolution `f ★ f` will be supported on `[0, 2L]`. This relationship is critical for correctly setting up the discretization grid and numerical integration limits for the convolution.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Function Representation**: Represent `f` as a *piecewise constant* function (histogram-like) on a uniform grid of `N` bins over its domain `[0, L]`. The optimization variables will be the `N` constant values (heights) within these bins. This representation naturally aligns with the optimal function being a characteristic function of an interval, which is piecewise constant.
+2.  **Enforcing Constraints**:
+    *   **Non-negativity `f(x) ≥ 0`**: The primary optimization variable should be an *unconstrained* array, say `g_values`. Transform `g_values` to `f_values` within the objective function using `f_values = g_values**2` (element-wise). This transformation ensures non-negativity and provides smooth, everywhere-differentiable gradients, which can aid optimization more effectively than `jax.nn.relu`.
+    *   **Normalization `∫f(x) dx = 1`**: Implement this as a dynamic normalization step *within* the objective function calculation. After enforcing non-negativity, calculate the current integral `current_integral_f = jnp.sum(f_values) * dx_f` (where `dx_f = L / N`), and then normalize `f_values_normalized = f_values / current_integral_f`. This ensures the constraint is met at each optimization step.
+3.  **Numerical Integration**: Use consistent and accurate numerical integration methods (e.g., Trapezoidal rule or Simpson's rule) for approximating the L1 and L2 norms.
+    *   The discretization step size `dx` must be consistent across `f` and `f ★ f`. If `f` is defined on `[0, L]` with `N` points, then `dx = L / N`. The convolution `f ★ f` will be defined on `[0, 2L]` with `2N` points (after padding for FFT), and the effective `dx` for its integration should also be `L / N`.
+
+**Recommended implementation patterns**:
+1.  **JAX**: Leverage JAX for automatic differentiation (`jax.value_and_grad`) and JIT compilation (`jax.jit`) to maximize performance.
+2.  **FFT-based Convolution**: Utilize `jnp.fft.fft` and `jnp.fft.ifft` for efficient convolution computation (`O(N log N)` complexity). Ensure proper zero-padding (e.g., to `2N` points if `f` has `N` points) for linear convolution.
+3.  **Explicit Discretization Parameters**:
+    *   Clearly define `L` (e.g., `L=1.0`) as the length of the domain for `f`.
+    *   Calculate `dx = L / num_intervals` as the grid spacing for both `f` and `f ★ f`.
+4.  **Objective Function Formulation**:
+    *   Define the optimization variable as an *unconstrained* JAX array, `g_values`.
+    *   Inside the objective function, transform `g_values` to `f_values` by applying the non-negativity constraint (i.e., `f_values = g_values**2`).
+    *   Apply normalization to `f_values` (`f_values = f_values / (jnp.sum(f_values) * dx)`).
+    *   Compute convolution `g = f_values ★ f_values`.
+    *   Calculate `||g||₂²` (e.g., `jnp.sum(g**2) * dx`) and `||g||_{∞}` (e.g., `jnp.max(g)`) using the correct `dx` for integration/summation and the simplified `C₂` formula.
+    *   Formulate the objective to minimize `-C₂ = - (||g||₂² / ||g||_{∞})`.
+
+# PROMPT-BLOCK-END

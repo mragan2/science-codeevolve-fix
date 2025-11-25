@@ -1,0 +1,112 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+- **Data Structure**: Represent each circle as a tuple `(x, y, r)` where `x, y` are center coordinates and `r` is the radius. A solution for N circles can be a `numpy` array of shape `(N, 3)`.
+- **Optimization Library**: Leverage `deap` (Distributed Evolutionary Algorithms in Python) for its robust framework for evolutionary algorithms, which are well-suited for this complex, high-dimensional, non-convex optimization problem.
+- **Fitness Function Design**: The core of the solution will be a fitness function that takes a candidate solution (an array of circles) and returns a score. This score must incorporate both the objective (sum of radii) and penalties for constraint violations (overlaps, out-of-bounds circles).
+- **Initialization Strategy**:
+    To avoid getting stuck in local optima with very small circles and to promote better solutions, consider a more sophisticated initialization:
+    1.  **Grid-based Heuristic**: Place circles in a regular grid pattern, initially small and non-overlapping. Then, attempt to inflate their radii greedily without creating overlaps, or perturb their positions slightly to fill space.
+    2.  **Randomized with Min-Distance & Varied Radii**: Generate circles with random `(x, y, r)` but ensure a minimum distance between them and that they fit within bounds (using the `r <= x <= 1-r` logic). Start with a moderate *range* for radii (e.g., `0.02` to `0.1` or `0.15`) rather than very small fixed ones, to allow for larger circles from the start.
+    3.  **Diversity**: Ensure the initial population has sufficient diversity in both positions and radii to explore a wider search space effectively.
+- **Vectorization & Performance**:
+    - Utilize `numpy` for vectorized operations, especially for distance calculations and constraint checks.
+    - For numerically intensive parts of the fitness function, consider using `numba.jit` (Just-In-Time compilation) to significantly speed up execution of Python code. Apply the `@numba.jit(nopython=True)` decorator to the `evalPacking` function or its core calculation loops for substantial performance gains.
+- **Hyperparameter Tuning for Time Limits**:
+    - The problem has a strict time limit (e.g., 180 seconds). If the solution times out, it is crucial to adjust hyperparameters like `POP_SIZE`, `NGEN` (for EAs), and `maxiter` (for local optimizers) downwards. Start with smaller values to ensure the program completes within the time budget, then incrementally increase them if there's remaining time and potential for higher accuracy. Prioritize meeting the time constraint over marginal improvements in `sum_radii`.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Evolutionary Algorithms (EAs)**: Given the non-convex and high-dimensional nature of the problem, EAs like Genetic Algorithms (GAs) or Differential Evolution (DE) are highly recommended.
+    - **Genotype**: A flattened array of `[x1, y1, r1, x2, y2, r2, ..., xN, yN, rN]`. Ensure `r_i` values are positive.
+    - **Initialization**: Populate the initial generation with valid circle configurations (e.g., small circles placed randomly without overlap, or a grid arrangement). Ensure `x, y` are within `[r, 1-r]` bounds.
+    - **Fitness Function**:
+        - **Objective**: Maximize `sum(r_i)`.
+        - **Penalties**: Heavily penalize constraint violations.
+            - **Containment Penalty**: For each circle `i`, if `x_i - r_i < 0` or `x_i + r_i > 1` or `y_i - r_i < 0` or `y_i + r_i > 1`, apply a penalty proportional to the squared extent of violation (e.g., `(max(0, r_i - x_i))^2`).
+            - **Overlap Penalty**: For each pair of circles `i, j`, if `dist((xi,yi), (xj,yj)) < ri + rj`, apply a penalty. A common approach is `max(0, (ri + rj) - dist)^2`.
+            - The overall fitness could be `sum_radii - C1 * containment_penalty - C2 * overlap_penalty`, where `C1` and `C2` are large constants (e.g., 1000 or 10000) to prioritize constraint satisfaction. Consider implementing a dynamic penalty approach: start with lower penalty weights in early generations to allow the GA to explore, and gradually increase them over generations to enforce stricter constraint satisfaction as the population evolves. This can help prevent premature convergence to poor local optima.
+    - **Selection**: Use a selection operator like `selTournament` or `selRoulette` from `deap`.
+    - **Crossover**: `cxBlend` (BLX-alpha) or `cxUniform` from `deap` can be effective for real-valued genomes.
+    - **Mutation**: `mutGaussian` to perturb `x, y, r` values.
+        **Repair Mechanism (Crucial for Feasibility)**: After mutation, apply a repair mechanism to ensure validity.
+        1.  **Positive Radii**: Clamp `r_i` to be `max(min_allowed_radius, r_i)`. A `min_allowed_radius` like `1e-4` prevents degenerate circles.
+        2.  **Containment Bounds**: For each circle `i` with radius `r_i`, clamp its center coordinates `(x_i, y_i)` such that:
+            -   `x_i = max(r_i, min(1 - r_i, x_i))`
+            -   `y_i = max(r_i, min(1 - r_i, y_i))`
+            This ensures circles are always contained within the unit square (i.e., `r_i <= x_i <= 1-r_i` and `r_i <= y_i <= 1-r_i`), preventing constant containment penalties and guiding the search effectively towards feasible regions.
+        3.  **Radius Upper Bound**: Consider a practical upper bound for `r_i` (e.g., `min(0.5, r_i)`) but be mindful not to restrict the search space too much. For N=32, the average radius will be much smaller than 0.5.
+- **Hybrid Approaches (Strongly Recommended)**:
+    Combine EAs for global exploration with local optimization methods (e.g., `scipy.optimize.minimize`) for local exploitation. This is crucial for achieving high-quality solutions in NP-hard problems like circle packing.
+    **Implementation Strategy**:
+    1.  Run the EA for a certain number of generations to find a set of promising candidate solutions (e.g., the best individual from the `HallOfFame`, or a small subset of the final population).
+    2.  For each promising candidate, use `scipy.optimize.minimize` to perform a local search.
+        -   **Objective Function for Local Search**: The local search should aim to maximize `sum(r_i)` while strictly enforcing geometric constraints. This can be done by using a penalty-based objective within `minimize` or by explicitly defining `NonlinearConstraint` functions for non-overlap and containment.
+        -   **Constraints for Local Search**: Explicitly define `Bounds` for `x, y, r` (e.g., `r <= x <= 1-r`, `r <= y <= 1-r`, `r > 0`).
+        -   **Method**: For initial attempts or when facing timeouts, prioritize faster methods like `SLSQP` or `L-BFGS-B`. While `trust-constr` is robust, it can be significantly slower per iteration. Experiment with these methods.
+        -   **Initial Guess**: The candidate solution from the EA.
+        -   **Local Search Iterations (`maxiter`)**: Start with a conservative `maxiter` (e.g., 200-500) for local search to ensure it completes within the time limit. Increase only if the solution quality is insufficient and time permits. The `gtol` (gradient tolerance) can also be adjusted to control convergence speed vs. accuracy.
+    3.  Select the best solution found after local optimization, which will typically have higher `sum_radii` and strict feasibility.
+- **Physics-based Simulation (Heuristic)**: Treat circles as particles with repulsive forces that push them apart, and boundary forces that keep them within the square. Gradually "inflate" their radii until a stable, non-overlapping configuration is found. This can be a good way to generate initial populations for an EA or for a standalone heuristic. `pymunk` could be explored for this.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **NP-Hard Problem**: Circle packing in a square is a classic problem in computational geometry and optimization, known to be NP-hard. This implies that finding the absolute global optimum is computationally intractable for large N, necessitating heuristic or metaheuristic approaches.
+- **Optimal Packing Characteristics**:
+    - Optimal configurations often involve circles touching each other and/or the boundaries of the square. The "kissing number" concept is relevant for local arrangements.
+    - The arrangement tends to maximize the "contact points" to utilize space efficiently, often resembling hexagonal close-packing locally, but distorted by the square boundary.
+- **Boundary Conditions**: Circles near the edges or corners of the unit square have fewer degrees of freedom and their placement is critical. A circle touching a corner will have `x=r, y=r`. A circle touching an edge will have `x=r` or `x=1-r` or `y=r` or `y=1-r`. These conditions define the valid range for `x, y` given `r`.
+- **Symmetry**: While the problem exhibits rotational and reflectional symmetry, enforcing it explicitly might constrain the search space too much for N=32, which doesn't necessarily lead to a simple symmetric pattern. It's often better to let the optimization algorithm discover the optimal configuration freely.
+- **Known Solutions**: For small N, exact solutions are known. For larger N like 32, high-quality numerical solutions are typically found through sophisticated algorithms. The provided benchmark `2.937944526205518` is a result of such efforts and serves as a challenging target.
+
+VALIDATION FRAMEWORK:
+- **`validate_circles(circles: np.ndarray) -> dict` function**:
+    - This function should accept a `(N, 3)` numpy array of circles `[(x1,y1,r1), ..., (xN,yN,rN)]`.
+    - It should return a dictionary containing:
+        - `'is_valid'`: A boolean indicating if all constraints (containment and non-overlap) are met within a small epsilon.
+        - `'sum_radii'`: The sum of all radii.
+        - `'max_overlap_dist'`: The largest `(ri + rj - dist(i,j))` for any overlapping pair, or 0 if no overlaps. This helps quantify the penalty.
+        - `'out_of_bounds_dist'`: The largest `(r - coordinate)` or `(coordinate - (1-r))` for any circle violating containment, or 0 if none.
+        - `'min_radius'`: The minimum radius among all circles (should be > 0).
+- **Containment Check**: For each circle `(x, y, r)`:
+    - `x - r >= 0 - epsilon` AND `x + r <= 1 + epsilon`
+    - `y - r >= 0 - epsilon` AND `y + r <= 1 + epsilon`
+    - A small positive `epsilon` (e.g., `1e-9` or `1e-6`) should be used for floating-point comparisons to avoid false negatives due to precision issues.
+- **Non-overlap Check**: For every unique pair of circles `i` and `j` (where `i < j` to avoid redundant checks and self-comparison):
+    - Calculate squared Euclidean distance: `dist_sq = (xi - xj)**2 + (yi - yj)**2`
+    - Check if `dist_sq >= (ri + rj)**2 - epsilon`.
+    - **Efficiency for Validation**: For N=32, a direct `O(N^2)` check is acceptable. For larger N, `scipy.spatial.KDTree` or `rtree` could be considered for faster nearest-neighbor queries, but might add overhead for N=32.
+
+# PROMPT-BLOCK-END
+    

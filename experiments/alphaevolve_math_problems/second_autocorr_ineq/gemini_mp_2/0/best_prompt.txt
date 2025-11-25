@@ -1,0 +1,89 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+- **Discretization**: The continuous function f(x) will be approximated by a discrete array of `N` non-negative values, `f_values`, representing samples of f over a compact support interval. For this problem, it is standard practice to assume f is supported on `[0, L]`. For initial implementations, set `L=1`. Thus, `f_values[i]` corresponds to `f(x_i)` where `x_i = i * (L/N)`.
+- **Convolution**: The convolution `(f ★ f)(x)` will then be supported on `[0, 2L]`. It can be efficiently computed using the Fast Fourier Transform (FFT). If `f` is represented by `N` points, `f ★ f` will typically involve approximately `2N` points. Ensure proper padding for FFT.
+- **Integral Approximations**:
+    - **Integral of f**: For a discrete `f_values` over `N` points on `[0, L]`, `∫f ≈ (L/N) * jnp.sum(f_values)`.
+    - **L1 Norm of Convolution**: Crucially, for non-negative `f`, the simplification `||f ★ f||₁ = (∫f)²` holds. This identity **MUST** be used directly in the objective function, avoiding direct numerical integration of `|f ★ f|`.
+    - **L2 Norm Squared of Convolution**: `||f ★ f||₂² = ∫(f ★ f)²`. For a discrete array `g_j` representing `f ★ f` over `M` points on `[0, 2L]`, this integral can be approximated by `(2L/M) * jnp.sum(g_j**2)`. More accurate numerical integration schemes (e.g., Simpson's rule) are highly recommended for precision.
+    - **Infinity Norm of Convolution**: `||f ★ f||_{∞} = sup(f ★ f)`. For a discrete array `g_j`, this is `jnp.max(g_j)`.
+- **Non-negativity Constraint**: `f(x) ≥ 0` must be strictly enforced, typically by applying `jax.nn.relu` to the `f_values` array or the output of a parametric function before computing norms.
+- **Symmetry**: For optimal C2, `f` is often symmetric about `L/2`. This property can be leveraged for initialization or constraint.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Function Representation**:
+    - **Direct Discretization**: The simplest approach is to directly optimize the `N` values in `f_values`. This allows for high flexibility but the optimal `N` must be carefully chosen.
+    - **Parametric Representation (AI-driven discovery)**: To explore a broader space of functions and potentially discover novel, smoother forms of `f`, consider representing `f(x)` using a parametric model. Examples include:
+        - A small neural network (e.g., a shallow MLP with `jax.nn.relu` or `jax.nn.softplus` activations to ensure non-negativity) that takes `x` as input and outputs `f(x)`. The network's parameters would be optimized.
+        - A sum of basis functions (e.g., B-splines, Gaussian functions, or trigonometric series).
+    This approach can lead to more generalizable and interpretable solutions.
+- **Initial Guess**: Instead of random initialization, consider initializing `f_values` (or the parameters of a parametric function) to approximate a known function that achieves a good C2 constant. A common example is a triangular pulse (e.g., `f(x) = x` for `x ∈ [0, L/2]` and `f(x) = L-x` for `x ∈ [L/2, L]`, appropriately scaled).
+- **Hyperparameter Tuning**: Systematically explore the impact of `num_intervals` (or network architecture), `learning_rate`, `num_steps`, and `warmup_steps`. Higher `num_intervals` typically allows for better C2 bounds but increases computational cost.
+- **Regularization**: To prevent highly oscillatory or numerically unstable solutions, consider adding regularization terms to the objective function:
+    - L1 or L2 regularization on `f_values` (or network parameters).
+    - Regularization on the derivatives of `f` (e.g., `jnp.sum(jnp.diff(f_values)**2)`) to promote smoothness.
+- **Domain Length Optimization**: For advanced exploration, the support length `L` (currently fixed at 1) could also be treated as an optimizable parameter.
+
+**Recommended implementation patterns**:
+- **JAX for Performance**:
+    - Use `jax.jit` to compile critical functions (e.g., `_objective_fn`, `train_step`) for significant speedups.
+    - **Crucially, when using `jax.jit`, avoid Python-style `if/else` statements that depend on the runtime values of JAX arrays.** Instead, use functional constructs like `jnp.where` for conditional logic, or ensure such checks are performed outside the jitted function. For example, to handle cases where a denominator might be zero or a condition leads to an invalid objective state (e.g., `integral_f` or `norm_inf_conv` being zero), use `jnp.where(condition, value_if_true, value_if_false)` to return a large penalty like `jnp.inf` or add a small epsilon (`1e-9`) to the denominator.
+    - Leverage `jax.grad` for automatic differentiation of the objective function.
+    - Consider `jax.vmap` if processing batches of `f` or `x` values (especially with parametric functions).
+- **FFT for Convolutions**: Utilize `jnp.fft.fft` and `jnp.fft.ifft` for efficient convolution computation. Pay attention to padding to ensure correct length and interpretation of the convolved function's domain.
+- **Numerical Integration**:
+    - For `∫f`, a simple Riemann sum `(L/N) * jnp.sum(f_values)` is often sufficient.
+    - For `||f ★ f||₂² = ∫(f ★ f)²`, implement an accurate numerical integration method, such as the trapezoidal rule or Simpson's rule, ensuring correct scaling by `dx_conv = 2L/M` where `M` is the number of points in the discretized convolution.
+- **Non-negativity Enforcement**: Apply `jax.nn.relu` or `jax.nn.softplus` to `f_values` or the output of a parametric `f` at the earliest possible stage in the objective calculation.
+- **Reproducibility**: Ensure `jax.random.PRNGKey(42)` and `numpy.random.seed(42)` are set consistently.
+- **Modularity and Clarity**: Structure the code with clear, well-named functions for distinct mathematical operations (e.g., `compute_convolution`, `compute_integral_f`, `compute_norms`, `objective_function`).
+- **Scaling and Units**: Carefully manage the scaling factors (`L/N`, `2L/M`) in numerical integrations to ensure the norms are calculated correctly based on the chosen domain `L`.
+
+# PROMPT-BLOCK-END

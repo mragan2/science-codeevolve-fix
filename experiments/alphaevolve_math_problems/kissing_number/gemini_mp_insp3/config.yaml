@@ -1,0 +1,119 @@
+CODEBASE_PATH: src/
+ENSEMBLE:
+- model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.7
+- model_name: GOOGLE_GEMINI-2.5-PRO
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.3
+EVAL_FILE_NAME: evaluate.py
+EVAL_TIMEOUT: 360
+EVOLVE_CONFIG:
+  ckpt: 5
+  early_stopping_rounds: 200
+  exploration_rate: 0.35
+  fitness_key: benchmark_ratio
+  init_pop: 10
+  max_chat_depth: 3
+  max_size: 50
+  meta_prompting: true
+  num_islands: 5
+  migration_topology: 'ring'
+  migration_interval: 40
+  migration_rate: 0.1
+  num_epochs: 200
+  num_inspirations: 3
+  selection_kwargs:
+    roulette_by_rank: true
+  selection_policy: roulette
+INIT_FILE_DATA:
+  filename: init_program.py
+  language: python
+MAX_MEM_BYTES: 5000000000
+MEM_CHECK_INTERVAL_S: 0.1
+SAMPLER_AUX_LM:
+  model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.8
+SYS_MSG: 'PERFORMANCE METRICS:
+
+  1.  **num_points**: The number of points in the final set $S$. **This is the primary
+  objective to maximize.**
+
+  2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio
+  > 1.0.
+
+  3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+
+  COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+
+  **Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+
+  **Additional useful packages**:
+
+  - **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective
+  optimization)
+
+  - **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing),
+  `scipy.spatial` (KDTree, Voronoi)
+
+  - **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+
+  - **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+
+  - **Performance**: `cython`, `joblib` (parallelization), ''numba'' (JIT)
+
+
+  TECHNICAL REQUIREMENTS:
+
+  - **Determinism & Reproducibility**: Your solution must be fully reproducible. If
+  you use any stochastic algorithms (like simulated annealing or genetic algorithms),
+  you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+
+  - **Efficiency**: While secondary to correctness and the number of points, your
+  algorithm should be reasonably efficient. Avoid brute-force searches over the entire
+  $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+
+  # PROMPT-BLOCK-START
+
+
+  SETTING:
+
+  TODO
+
+
+  PROBLEM CONTEXT:
+
+  TODO
+
+
+  OPTIMIZATION STRATEGIES TO CONSIDER:
+
+  TODO
+
+
+  GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+
+  TODO
+
+
+  **Recommended implementation patterns**:
+
+  TODO
+
+
+  # PROMPT-BLOCK-END
+
+  '

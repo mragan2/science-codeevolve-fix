@@ -1,0 +1,82 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+For this challenging non-convex optimization problem, a multi-pronged approach is often most effective:
+1.  **Local Optimization with `scipy.optimize.minimize`**: This is suitable for refining a solution once a good initial guess is found. Methods like `SLSQP` or `COBYLA` are capable of handling non-linear inequality constraints.
+2.  **Global Optimization / Metaheuristics**: Given the problem's non-convexity and high dimensionality (32 circles * 3 parameters = 96 variables), global search algorithms are essential to avoid poor local optima.
+    *   **Evolutionary Algorithms**: Packages like `deap` or `platypus` offer powerful tools for genetic algorithms and other evolutionary strategies.
+    *   **Differential Evolution**: `scipy.optimize.differential_evolution` is a robust global optimizer that can handle bounds and sometimes constraints effectively.
+    *   **Basin Hopping**: `scipy.optimize.basinhopping` combines local minimization with random jumps to explore the search space more thoroughly.
+3.  **Hybrid Approaches**: A common and often successful strategy is to combine global search (e.g., Differential Evolution or a genetic algorithm) to find promising regions, followed by a local optimizer (e.g., `SLSQP`) to fine-tune the solution.
+4.  **Physics-based simulation (heuristic)**: `pymunk` or similar libraries can be used to simulate circles repelling each other and being contained by boundaries, serving as a heuristic to generate initial configurations or to 'relax' an existing configuration towards a more stable state.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Decision Variables**: Represent each circle by its center coordinates (xi, yi) and radius (ri). The optimization variable vector will be `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]`.
+2.  **Objective Function**: The goal is to maximize Σri. For `scipy.optimize.minimize`, define the objective as `f(params) = -np.sum(radii)`.
+3.  **Constraints Formulation**:
+    *   **Radius Positivity**: `ri > 0`. This can be handled by bounds or as an inequality constraint `ri >= epsilon`.
+    *   **Containment**: `ri <= xi <= 1-ri` and `ri <= yi <= 1-ri`. These are non-linear bounds or can be formulated as inequality constraints: `xi - ri >= 0`, `1 - ri - xi >= 0`, `yi - ri >= 0`, `1 - ri - yi >= 0`.
+    *   **Non-overlap**: For each pair of distinct circles (i, j), the squared distance between centers must be greater than or equal to the squared sum of their radii: `(xi-xj)² + (yi-yj)² - (ri+rj)² >= 0`. There are `N*(N-1)/2` such constraints. For N=32, this is `32*31/2 = 496` constraints.
+4.  **Initial Population/Guesses**:
+    *   **Random Initialization**: Randomly place circles with small, random radii within the unit square. This can be a good starting point for global optimizers.
+    *   **Grid-based Initialization**: Place circles in a somewhat regular grid, then perturb.
+    *   **"Grow and Jiggle"**: Start with very small radii, optimize, then slightly increase radii and re-optimize, iteratively.
+5.  **Algorithm Selection**:
+    *   For `scipy.optimize.minimize`: `method='SLSQP'` is often a good choice for problems with non-linear inequality constraints. `method='COBYLA'` is also suitable.
+    *   For global search: `scipy.optimize.differential_evolution` is highly recommended. It handles bounds implicitly and can be combined with a penalty function for constraints or custom constraint handling.
+    *   When using `deap` or `platypus`, design the genetic operators (mutation, crossover) to respect bounds and potentially constraints.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **NP-Hard Problem**: Circle packing is a known NP-hard problem, meaning there's no generally efficient algorithm guaranteed to find the absolute optimal solution for arbitrary N. Heuristics and metaheuristics are essential.
+2.  **Contact Graph**: Optimal packings often feature many circles in contact with each other and the boundaries. The structure of these contact points can be visualized as a graph.
+3.  **Local vs. Global Optima**: Due to the non-convex nature, many local optima exist. The challenge is to find the global optimum or a very good approximation.
+4.  **Efficient Distance Calculation**: With 32 circles, there are 496 pairs. Efficiently computing pairwise distances (e.g., using `scipy.spatial.distance.pdist` from `scipy.spatial`) is crucial for performance within the objective/constraint functions.
+5.  **Symmetry**: While not always present, optimal solutions for certain `N` exhibit geometric symmetries. For `N=32`, complex patterns are expected.
+6.  **Gradient Information**: For gradient-based optimizers, if analytical gradients for the objective and constraints are too complex to derive, numerical differentiation (finite differences) can be used, though it adds computational overhead.
+
+VALIDATION FRAMEWORK:
+1.  **`is_valid_packing(circles, square_size=1.0, tolerance=1e-6)` Function**: Implement a helper function that takes the `(N, 3)` array of circles and returns `True` if all constraints (containment and non-overlap) are met within a given `tolerance`, `False` otherwise. It should also return a detailed list of violated constraints for debugging.
+    *   **Containment Check**: Iterate through each circle `(x, y, r)` and verify `r <= x <= square_size - r` and `r <= y <= square_size - r`.
+    *   **Non-overlap Check**: Iterate through all unique pairs of circles `(i, j)`. Calculate the distance between centers `d_ij` and verify `d_ij >= r_i + r_j - tolerance`.
+    *   **Radius Positivity**: Check `r_i > tolerance` for all `i`.
+2.  **Visualization with `matplotlib`**: Plotting the circles within the unit square is essential for verifying the solution visually and understanding packing patterns.
+    *   Use `matplotlib.pyplot.Circle` to draw each circle.
+    *   Set `aspect='equal'` to ensure circles appear circular.
+    *   Set `xlim` and `ylim` to `[0, 1]`.
+3.  **Numerical Stability**: Be mindful of floating-point precision issues when checking inequalities. Use a small `tolerance` (e.g., `1e-6`) to allow for minor numerical inaccuracies.
+
+# PROMPT-BLOCK-END
+    

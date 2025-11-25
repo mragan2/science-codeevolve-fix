@@ -1,0 +1,93 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on hexagon packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 11 unit regular hexagons within a larger regular hexagon, maximizing 1/outer_hex_side_length (equivalently minimizing the outer hexagon's side length).
+
+PROBLEM CONTEXT:
+- Target: Beat the current state-of-the-art benchmark of 1/outer_hex_side_length = 1/3.931 ≈ 0.2544
+- Constraint: All 11 inner hexagons must be unit regular hexagons (side length = 1) that are fully contained within the outer hexagon with no overlaps
+- Mathematical formulation: For hexagon i at position (xi, yi) with rotation θi:
+  * Non-overlap: All pairs of inner hexagons must be disjoint
+  * Containment: All vertices of inner hexagons must lie within the outer hexagon
+  * Objective: maximize 1/R where R is the outer hexagon side length
+
+PERFORMANCE METRICS:
+1. **inv_outer_hex_side_length**: 1/outer_hex_side_length (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: inverse_side_length / 0.2544 (progress toward beating SOTA)
+3. **eval_time**: Execution time for full evaluation
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, matplotlib, shapely
+**Additional useful packages**:
+- **Geometric computing**: 
+  * `shapely` (polygon operations, intersection testing, containment checks)
+  * `scipy.spatial` (distance calculations, geometric queries)
+- **Optimization**: 
+  * `scipy.optimize` (constrained optimization, global methods)
+  * `deap` (evolutionary algorithms with custom operators)
+  * `platypus` (multi-objective optimization)
+- **Collision detection**: 
+  * `pymunk` (2D rigid body physics with polygon shapes)
+  * Custom SAT (Separating Axis Theorem) implementations
+- **Performance**: `numba` (JIT compilation for geometric calculations), `joblib`
+
+TECHNICAL REQUIREMENTS:
+- **Numerical stability**: Handle hexagon intersection and containment calculations robustly
+- **Reproducibility**: Fixed random seeds for stochastic optimization methods
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+*   **Hexagon Representation**: Create a helper function `create_hexagon_polygon(center_x, center_y, side_length, rotation_degrees)` that returns a `shapely.geometry.Polygon` object. All inner hexagons have `side_length = 1`.
+*   **Optimization State Vector**: Represent the state of the 11 inner hexagons as a 1D NumPy array `params` of shape `(33,)`. Each hexagon `i` will contribute `[x_i, y_i, rotation_i_degrees]`.
+*   **Objective Function**: Design `objective_function(params: np.ndarray) -> float`. This function will:
+    1.  Parse `params` into individual hexagon configurations (center, rotation).
+    2.  Generate `shapely.Polygon` objects for all 11 inner hexagons.
+    3.  Check for overlaps: If any pair of inner hexagons intersects (`p1.intersects(p2)`), return `float('inf')` or a very large penalty to guide the optimizer away from invalid configurations.
+    4.  Calculate the side length of the *smallest regular hexagon* that encloses all 11 inner hexagons. This is the value to be minimized.
+    5.  Return this calculated `outer_hex_side_length`.
+*   **Outer Hexagon Definition**: The outer hexagon should be centered at `(0,0)` to simplify calculations. Its orientation can either be fixed (e.g., 0 degrees, flat-top/bottom) or optimized alongside the inner hexagons. If optimized, add its rotation to the `params` vector.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Global Optimization**: This problem is highly multi-modal with many local optima. Pure local search methods are unlikely to find the global optimum.
+    *   `scipy.optimize.differential_evolution`: A robust global optimization algorithm suitable for this type of problem. It explores the search space effectively.
+    *   `scipy.optimize.basinhopping`: Combines local minimization with random jumps to escape local minima.
+*   **Local Refinement**: After a global search finds a promising region, `scipy.optimize.minimize` with methods like 'Nelder-Mead' or 'BFGS' can be used for fine-tuning.
+*   **Initial Population/Guess**: The choice of initial conditions is crucial.
+    *   Consider a "seed" configuration: for 11 hexagons, a common pattern is a central hexagon surrounded by 6, with the remaining 4 placed symmetrically or semi-symmetrically around this cluster.
+    *   Randomly perturb these seed positions and rotations to generate a diverse initial population for global optimizers.
+*   **Bounds**: Define appropriate bounds for `x`, `y` coordinates (e.g., `[-5, 5]`) and rotations (e.g., `[0, 60]` or `[0, 360]`). Due to the 6-fold symmetry of a regular hexagon, rotations only need to be optimized within `[0, 60)` degrees; values outside this range are geometrically equivalent by rotation.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Unit Hexagon Properties**: For a unit regular hexagon (side length `s=1`):
+    *   Apothem (inradius): `h = s * sqrt(3)/2`
+    *   Circumradius: `R_circ = s`
+    *   Height (distance between parallel sides): `2h = s * sqrt(3)`
+    *   Width (distance between opposite vertices): `2R_circ = 2s`
+*   **Vertex Calculation**: For a hexagon centered at `(cx, cy)` with side `s` and rotation `theta_degrees`: its 6 vertices can be found using `(cx + s * cos(angle), cy + s * sin(angle))` where `angle = radians(theta_degrees) + k * pi/3` for `k = 0, ..., 5`.
+*   **Overlap Detection**: Use `shapely.Polygon.intersects(other_polygon)` for robust checks.
+*   **Calculating Smallest Enclosing Regular Hexagon**:
+    1.  Collect all 66 vertices (6 vertices * 11 inner hexagons).
+    2.  The smallest regular hexagon enclosing a set of points can be found by considering the projections of these points onto axes normal to the outer hexagon's sides.
+    3.  For a given outer hexagon orientation (e.g., 0 degrees, flat-top), calculate the maximum extent along the three principal directions (e.g., x-axis, and axes at 60 and 120 degrees). The maximum distance between parallel lines containing the point set for each orientation determines the apothem of the outer hexagon.
+    4.  The overall minimum outer hexagon side length `R` is derived from the minimal apothem found across all possible orientations of the outer hexagon (or by optimizing the outer hexagon's rotation directly as part of the `params` vector).
+    5.  A robust method involves:
+        *   Compute the `shapely.geometry.MultiPoint` of all inner hexagon vertices.
+        *   Compute the `convex_hull` of these points.
+        *   Then find the minimum enclosing regular hexagon for this convex hull. This typically involves iterating through a range of outer hexagon orientations (e.g., 0 to 60 degrees) and for each orientation, finding the maximum extent of the convex hull vertices along axes perpendicular to the outer hexagon's sides. The smallest such extent determines the outer hexagon's size.
+
+VALIDATION FRAMEWORK:
+*   **Visual Inspection**: Use `matplotlib` to plot all 11 inner hexagons and the calculated outer hexagon. This provides immediate visual feedback on overlaps and containment.
+*   **Programmatic Checks**:
+    *   **Non-overlap**: Iterate through all pairs of inner hexagons and assert `not p1.intersects(p2)`.
+    *   **Containment**: Ensure all vertices of all inner hexagons are strictly within the calculated outer hexagon. `outer_polygon.contains(inner_polygon)` can be used, or by checking each vertex.
+*   **Edge Cases**: Test with simple, known configurations (e.g., a single hexagon, a 7-hexagon flower pattern) to ensure geometric primitives and the objective function are correct.
+
+PROBLEM-SPECIFIC CONSIDERATIONS:
+*   **Global Optimum Challenge**: This is a classic hard packing problem in computational geometry. The benchmark value suggests a highly optimized, non-trivial configuration.
+*   **Symmetry**: While individual hexagons have 6-fold symmetry, the optimal arrangement of 11 hexagons might only exhibit lower symmetries (e.g., 2-fold rotational symmetry or reflectional symmetry).
+*   **Reference Configurations**: For N=11, optimal packings often involve a central cluster (e.g., a "flower" of 7 hexagons) with the remaining hexagons filling gaps or extending outward.
+*   **Computational Cost**: Geometric operations, especially polygon intersections and convex hull calculations, can be computationally intensive. Use `shapely` for efficiency, and consider `numba` for custom hot-path calculations if performance is critical.
+*   **Coordinate System**: Fixing the outer hexagon's center at `(0,0)` simplifies the problem and reduces the number of optimization variables.
+
+# PROMPT-BLOCK-END
+    

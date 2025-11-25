@@ -1,0 +1,131 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a fundamental challenge in discrete geometry first posed by Hans Heilbronn in 1957.
+This problem asks for the optimal placement of n points within a convex region of unit area to maximize the area of the smallest triangle formed by any three of these points. 
+Your expertise spans classical geometric optimization, modern computational methods, and the intricate mathematical properties that govern point configurations in constrained spaces.
+
+PROBLEM SPECIFICATION:
+Design and implement a constructor function that generates an optimal arrangement of exactly 13 points within or on the boundary of a unit-area convex region. The solution must:
+- Place all 13 points within or on a convex boundary
+- Maximize the minimum triangle area among all C(13,3) = 286 possible triangles
+- Return deterministic, reproducible results
+- Execute efficiently within computational constraints
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary algorithms), `nevergrad` (gradient-free optimization)
+- **Metaheuristics**: `scikit-opt` (PSO, GA, SA), `optuna` (Bayesian optimization), `hyperopt` (hyperparameter tuning)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay, Voronoi, ConvexHull), `trimesh` (mesh processing)
+- **Specialized algorithms**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `casadi` (nonlinear optimization)
+- **High-performance computing**: `cython` (C extensions), `dask` (parallel computing)
+- **Quasi-random sequences**: `sobol_seq` for low-discrepancy initialization
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: (Area of smallest triangle) / (Area of convex hull) [PRIMARY - MAXIMIZE]
+2. **benchmark_ratio**: min_area_normalized / 0.0309 [BENCHMARK COMPARISON - TARGET > 1.0]
+3. **eval_time**: Execution time in seconds [EFFICIENCY - secondary priority]
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+- **PROBLEM COMPLEXITY**: The Heilbronn problem is among the most challenging in discrete geometry, with optimal configurations rigorously known only for n ≤ 4 points
+- **ASYMPTOTIC BEHAVIOR**: For large n, the optimal value approaches O(1/n²) with logarithmic corrections, but the exact constant remains unknown
+- **GEOMETRIC CONSTRAINTS**: Points must balance competing objectives:
+  * Interior points can form larger triangles but create crowding
+  * Boundary points avoid area penalties but limit triangle formation
+  * Edge cases arise when three points become nearly collinear
+- **SYMMETRY CONSIDERATIONS**: Optimal configurations often exhibit rotational symmetries (particularly 3-fold due to triangular geometry)
+- **SCALING INVARIANCE**: The problem is scale-invariant; solutions can be normalized to any convex region
+- **CRITICAL GEOMETRIC PROPERTIES**:
+  * Delaunay triangulation properties and angle optimization
+  * Voronoi diagram regularity as indicator of point distribution quality
+  * Relationship between circumradius and triangle area
+  * Connection to sphere packing and energy minimization principles
+
+ADVANCED OPTIMIZATION STRATEGIES:
+- **MULTI-SCALE APPROACH**: Coarse global search → fine local refinement with adaptive step sizes
+- **CONSTRAINT HANDLING**: Penalty methods, barrier functions, or projection operators for convexity
+- **INITIALIZATION STRATEGIES**:
+  * Perturbed regular grids (triangular, square, hexagonal lattices)
+  * Random points with force-based relaxation
+  * Symmetry-constrained configurations (3-fold, 6-fold rotational)
+  * Hybrid boundary/interior distributions
+  * Low-discrepancy sequences (Sobol, Halton) for uniform coverage
+- **OBJECTIVE FUNCTION DESIGN**:
+  * Smooth approximations to min() function (LogSumExp, p-norms with p→∞)
+  * Barrier methods for boundary constraints
+  * Multi-objective formulations balancing multiple triangle areas
+  * Weighted combinations of smallest k triangle areas
+- **ADVANCED TECHNIQUES**:
+  * Riemannian optimization on manifolds
+  * Variational methods treating point density as continuous field
+  * Machine learning-guided search using learned geometric priors
+  * Topological optimization considering point connectivity graphs
+  * Continuation methods with parameter homotopy
+
+GEOMETRIC INSIGHTS & HEURISTICS:
+- **BOUNDARY CONSIDERATIONS**: Points on boundary contribute to convex hull but may form smaller triangles
+- **TRIANGLE DEGENERACY**: Avoid near-collinear configurations that create arbitrarily small triangles
+- **LOCAL VS GLOBAL**: Balance between locally optimal triangle sizes and global configuration harmony
+- **SYMMETRY EXPLOITATION**: 3-fold rotational symmetry often appears in optimal configurations
+- **VORONOI RELATIONSHIPS**: Points should have roughly equal Voronoi cell areas for optimal distribution
+- **ENERGY ANALOGIES**: Treat as electrostatic repulsion or gravitational equilibrium problem
+- **HISTORICAL APPROACHES**:
+  * Regular lattice arrangements (suboptimal but provide baselines)
+  * Hexagonal close-packing adaptations
+  * Force-based relaxation (treating points as mutually repelling particles)
+  * Simulated annealing and evolutionary computation
+  * Gradient descent with carefully designed objective functions
+
+**Recommended implementation patterns**:
+To achieve optimal point placement, you *must* implement a robust global optimization algorithm. Follow these steps:
+
+1.  **Define the Search Space**: The problem is scale-invariant. For practical implementation, assume the convex region is the unit square `[0, 1] x [0, 1]`. All 13 points must have coordinates within this range. The optimization algorithm will search for the optimal `(x, y)` coordinates for all 13 points. This means the optimization variable will be a flattened array of 26 floating-point numbers.
+
+2.  **Objective Function (`min_triangle_area_objective`)**:
+    *   This function will accept a 1D numpy array `x` of 26 values (representing the 13 `(x, y)` coordinates).
+    *   Reshape `x` into a `(13, 2)` numpy array of points.
+    *   Iterate through all `C(13, 3) = 286` unique combinations of three points. `itertools.combinations` is useful here.
+    *   For each triplet of points `(p1, p2, p3)`, calculate the area of the triangle they form. A numerically stable and efficient method is using the determinant formula: `area = 0.5 * abs(p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))`. This avoids `sqrt` until the very end and handles collinear points (area will be 0).
+    *   Keep track of the minimum non-zero area found. If all points are collinear, the minimum area is 0.
+    *   Since optimization algorithms typically *minimize*, the objective function should return the *negative* of the smallest triangle area found. This effectively maximizes the minimum area.
+    *   **Acceleration**: For performance, consider using `numba.jit` to compile this objective function or critical sub-parts of it, especially the triangle area calculation loop.
+
+3.  **Optimization Engine**:
+    *   **PRIMARY RECOMMENDATION**: `scipy.optimize.differential_evolution` is highly recommended for this problem due to its global search capabilities, robustness to local minima, and suitability for non-smooth objective functions (like `min()`).
+    *   Set the `bounds` for each coordinate to `(0.0, 1.0)`. This will be 26 bounds for the 26 variables.
+    *   Ensure reproducibility by setting the `seed` parameter (e.g., `seed=42`).
+    *   Consider tuning `popsize` and `maxiter` within the `eval_time` constraints. A larger `popsize` can explore the search space more thoroughly but takes longer.
+    *   Alternative: `scipy.optimize.basinhopping` can also be effective, potentially combined with a local minimizer like `L-BFGS-B`.
+
+4.  **Initial Point Generation**:
+    *   **Low-discrepancy sequences**: Utilize `sobol_seq` (from `sobol_seq` package) or other quasi-random sequences to generate a good initial population for `differential_evolution`. This provides more uniform coverage of the search space than purely random points.
+    *   Consider using configurations with rotational symmetry (e.g., 3-fold) as initial guesses or components of the initial population, as optimal solutions often exhibit such symmetries.
+
+5.  **Return Value**: The constructor function should return the `x` (flattened coordinates) corresponding to the best minimum area found by the optimizer, reshaped back into a `(13, 2)` numpy array.
+
+VALIDATION FRAMEWORK:
+- **Geometric constraint verification**:
+  * Point count validation: Exactly 13 points required
+  * Convexity check: All points within or on boundary of convex hull
+- **Data integrity checks**:
+  * Coordinate bounds: All coordinates are finite real numbers
+  * Point uniqueness: No duplicate points (within numerical tolerance)
+  * Geometric consistency: Points form valid geometric configuration
+- **Solution quality assessment**:
+  * Local optimality testing through small perturbations
+  * Symmetry analysis: Detection of rotational/reflectional symmetries
+  * Distribution quality: Voronoi cell area variance, nearest neighbor statistics
+  * Convergence verification: For iterative methods, check convergence criteria
+- **Determinism verification**:
+  * Multiple execution consistency: Same results across multiple runs
+  * Seed effectiveness: Proper random seed implementation
+  * Platform independence: Results stable across different computing environments
+
+# PROMPT-BLOCK-END
+    

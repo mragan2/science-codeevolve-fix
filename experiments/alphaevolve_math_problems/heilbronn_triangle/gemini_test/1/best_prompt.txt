@@ -1,0 +1,81 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a classical problem in discrete geometry that asks for the optimal placement of n points to maximize the minimum triangle area formed by any three points.
+
+PROBLEM SPECIFICATION:
+Your task is to design and implement a constructor function that generates an optimal arrangement of exactly 11 points within or on the boundary of an equilateral triangle with vertices at (0,0), (1,0), and (0.5, sqrt(3)/2).
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: Area of the smallest triangle among all point triplets (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: min_area_normalized / 0.0366 (BENCHMARK COMPARISON - maximize above 1.0)
+3. **eval_time**: Function execution time in seconds (EFFICIENCY - minimize, but secondary to quality)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary computation), `platypus` (NSGA-II)
+- **Metaheuristics**: `scikit-opt` (particle swarm, genetic algorithms), `nevergrad` (gradient-free optimization), `optuna` (Bayesian optimization)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay triangulation), `triangle` (mesh generation)
+- **Constraint programming**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `python-constraint`
+- **High-performance**: `cython` (C extensions), `numexpr` (fast numerical expressions)
+- **Quasi-random sampling**: `sobol_seq` for low-discrepancy point generation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem seeks to place `n` points within a given convex region (here, an equilateral triangle) such that the minimum area among all possible triangles formed by any three of these points is maximized. This is a "maximin" optimization problem.
+For `n=11`, the best-known normalized minimum area (i.e., the minimum triangle area divided by the area of the bounding equilateral triangle) is approximately `0.0366`. The bounding region is an equilateral triangle with vertices `A=(0,0)`, `B=(1,0)`, and `C=(0.5, np.sqrt(3)/2)`. The area of this bounding triangle is `np.sqrt(3)/4`.
+The problem is highly non-trivial and generally lacks analytical solutions for `n > 7`. Computational optimization is the standard approach.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Given the non-convex nature of the search space and the high dimensionality (2 * `n` variables, i.e., 22 variables for `n=11`), global optimization algorithms are most suitable.
+*   **Evolutionary Algorithms (e.g., Genetic Algorithms, `deap` library)**: These are highly effective for exploring complex, multimodal landscapes. The fitness function should be the `min_area_normalized`. Boundary constraints (points must stay within the equilateral triangle) can be handled via penalty functions, projection-based repair mechanisms, or specialized genetic operators.
+*   **Other Metaheuristics**: Simulated Annealing, Particle Swarm Optimization (`scikit-opt`), or Bayesian Optimization (`optuna`) can also be explored for global search.
+*   **Hybrid Approaches**: A common strategy is to use a global search algorithm (like GA) to find promising candidate regions, followed by a local optimization method (e.g., `scipy.optimize.minimize` with gradient-free methods like `Nelder-Mead` or `Powell`) to fine-tune the point positions for further improvement.
+*   **Initial Population Generation**: For metaheuristics, a diverse and well-distributed initial population is crucial. Consider random uniform sampling within the bounding triangle or using low-discrepancy sequences (e.g., Sobol sequences from `sobol_seq`) for a more even initial distribution.
+
+**Recommended implementation patterns**:
+*   **Point Representation**: Use a `numpy.ndarray` of shape `(n, 2)` to store the `(x, y)` coordinates of the `n` points.
+*   **Triangle Area Calculation**: For three points `p1, p2, p3`, the area can be calculated efficiently using the determinant formula: `0.5 * abs(p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))`.
+*   **Point-in-Triangle Check**: To ensure points remain within the bounding equilateral triangle (vertices `A=(0,0)`, `B=(1,0)`, `C=(0.5, np.sqrt(3)/2)`), use a robust geometric test. One method is based on barycentric coordinates: a point `P` is inside `ABC` if its barycentric coordinates `(u, v, w)` satisfy `u >= 0, v >= 0, w >= 0`. Alternatively, check if `P` lies on the same side of all three edges `AB`, `BC`, `CA` using signed areas (cross products).
+*   **Objective Function Structure**:
+    ```python
+    import numpy as np
+    import itertools
+
+    def calculate_min_normalized_area(points, bounding_triangle_area):
+        min_area = float('inf')
+        # Iterate over all unique combinations of 3 points
+        for i, j, k in itertools.combinations(range(len(points)), 3):
+            p1, p2, p3 = points[i], points[j], points[k]
+            # Calculate absolute area
+            area = 0.5 * np.abs(p1[0]*(p2[1]-p3[1]) + p2[0]*(p3[1]-p1[1]) + p3[0]*(p1[1]-p2[1]))
+            min_area = min(min_area, area)
+        return min_area / bounding_triangle_area if bounding_triangle_area > 0 else 0.0
+    ```
+*   **Genetic Algorithm Integration (e.g., with `deap`)**:
+    *   Define a `creator.create("FitnessMax", base.Fitness, weights=(1.0,))` and `creator.create("Individual", list, fitness=creator.FitnessMax)` for individuals and their fitness.
+    *   Register genetic operators (`toolbox.register`) for selection, crossover, and mutation.
+    *   The `evaluate` function will call `calculate_min_normalized_area`.
+    *   The `mutate` operator should be designed to keep points within the bounding triangle, or a penalty term should be incorporated into the fitness function for out-of-bounds points.
+
+VALIDATION FRAMEWORK:
+*   **Boundary Check**: After the optimization, verify that all `n=11` generated points are strictly within or on the boundary of the equilateral triangle `(0,0), (1,0), (0.5, np.sqrt(3)/2)`.
+*   **Triangle Area Calculation**: Compute the area for all `C(11,3)` unique triplets of points using the determinant method.
+*   **Minimum Identification**: Identify the smallest of these absolute triangle areas.
+*   **Normalization**: Divide this absolute minimum area by the area of the bounding triangle (`np.sqrt(3)/4`) to obtain the `min_area_normalized`.
+*   **Benchmark Comparison**: Compare the `min_area_normalized` against the target `0.0366` to calculate the `benchmark_ratio`.
+
+CONSTRAINTS AND CRITICAL REQUIREMENTS:
+*   **Number of points**: Exactly `n=11`.
+*   **Bounding Region**: The points MUST be placed within or on the boundary of the specified equilateral triangle with vertices `(0,0)`, `(1,0)`, `(0.5, np.sqrt(3)/2)`.
+*   **Primary Objective**: Maximize the `min_area_normalized`.
+*   **Reproducibility**: If stochastic optimization methods are used, ensure a fixed random seed is set for `numpy`, `random`, and any relevant optimization libraries (e.g., `deap`) to guarantee identical results across runs.
+*   **Degeneracy Handling**: The objective function must correctly handle cases where three points are collinear or identical. These configurations result in degenerate triangles with zero area and should be heavily penalized (or result in a fitness of 0.0) to guide the optimizer away from such solutions.
+*   **Computational Efficiency**: While solution quality is paramount, the implementation should be reasonably optimized for the given `eval_time` metric. Leverage `numpy` for vectorized computations where appropriate, especially for distance calculations or point transformations.
+
+# PROMPT-BLOCK-END

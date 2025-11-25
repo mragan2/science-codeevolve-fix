@@ -1,0 +1,56 @@
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+SETTING:
+You are an expert in high-dimensional discrete geometry, lattice theory, and combinatorial optimization. Your task is to find a large set of 11-dimensional integer points satisfying a specific geometric packing condition.
+
+PROBLEM CONTEXT:
+The objective is to construct a collection of 11-dimensional points, $S = \{p_1, p_2, \dots, p_N\}$, where each $p_i \in \mathbb{Z}^{11}$ (all coordinates are integers). This set must satisfy the following geometric condition:
+Let $R = \max_{p \in S} ||p||_2$ be the maximum Euclidean norm among all points in $S$.
+Let $D_{min} = \min_{p,q \in S, p \ne q} ||p - q||_2$ be the minimum Euclidean distance between any two distinct points in $S$.
+The core requirement is to maximize the number of points $N = |S|$ subject to the condition:
+$R < D_{min}$
+
+This problem is a variant of sphere packing or code design, where integer points are centers of non-overlapping open spheres. Specifically, if we consider spheres of radius $r = R/2$ centered at each point $p \in S$, the condition $R < D_{min}$ implies that $2r < D_{min}$, ensuring that these spheres are strictly non-overlapping. Additionally, all sphere centers must satisfy $||p||_2 \le R$. The benchmark of 593 points suggests a connection to highly optimized configurations, similar to the known kissing number in 11 dimensions (which is 582).
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Fixed Norm Approach**: A highly effective strategy is to focus on sets $S$ where all points $p \in S$ have the *same* squared Euclidean norm, say $M$. In this case, $R = \sqrt{M}$. The condition then simplifies to $M < D_{min}^2$. This means you need to find a large set of integer points on a sphere of radius $\sqrt{M}$ such that their pairwise squared distances are all strictly greater than $M$. This transforms the problem into finding a maximum independent set in a graph where vertices are candidate points on a sphere of radius $\sqrt{M}$, and an edge exists between two points if their squared distance is $\le M$.
+2.  **Lattice-based Constructions**: Optimal sphere packings and kissing configurations often arise from highly symmetric lattices (e.g., $D_n$, $E_n$, Leech lattice). Consider constructing candidate points from specific lattice structures or their duals in 11 dimensions. For example, permutations and sign changes of basis vectors or specific integer vectors with a fixed number of non-zero entries.
+3.  **Greedy/Iterative Construction**: Start with a small valid set of points (e.g., the $2 \times 11 = 22$ points of type $(\pm 1, 0, \dots, 0)$ and their permutations, where $M=1$ and $D_{min}^2=2$). Then iteratively add new candidate points that maintain the condition $R < D_{min}$. When adding a new point, $R$ might increase, which tightens the distance constraint for all pairs.
+4.  **Pre-computation and Filtering**: Generate a large pool of candidate integer points (e.g., points with small integer coordinates whose squared norm is below a certain threshold). Then, from this pool, select a subset that forms a valid configuration.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+-   **Squared Euclidean Norm and Distance**: For computational efficiency and to avoid floating-point errors with integers, it's beneficial to work with squared norms and distances:
+    -   $||p||_2^2 = \sum_{i=1}^{11} p_i^2$
+    -   $||p - q||_2^2 = \sum_{i=1}^{11} (p_i - q_i)^2$
+    -   The condition $R < D_{min}$ is equivalent to $R^2 < D_{min}^2$.
+-   **Integer Grid Properties**: The smallest possible non-zero squared Euclidean distance between two distinct integer points is 1. The smallest non-zero squared Euclidean norm for an integer point is 1 (e.g., $(\pm 1, 0, \dots, 0)$).
+-   **Example of a valid small set**: The set of $2 \times 11 = 22$ points formed by $(\pm 1, 0, \dots, 0)$ and its permutations (e.g., $(\pm 1, 0, \dots, 0), (0, \pm 1, 0, \dots, 0), \dots$). For this set, the maximum squared norm $R^2=1$. The minimum squared pairwise distance $D_{min}^2=2$ (e.g., between $(1,0,\dots,0)$ and $(0,1,\dots,0)$). Since $R^2 < D_{min}^2$ ($1 < 2$), this set is valid.
+-   **Finding more points (Example with $M=3$)**: Consider sets where all points have the same squared norm $M=3$, such as permutations of $(\pm 1, \pm 1, \pm 1, 0, \dots, 0)$. There are $2^3 \binom{11}{3} = 1320$ such distinct points. For these points, $R^2=3$. The minimum squared distance between any two such points is 4 (e.g., between $(1,1,1,0,\dots,0)$ and $(1,1,-1,0,\dots,0)$). Since $R^2 < D_{min}^2$ ($3 < 4$), this set of 1320 points is a valid solution. This demonstrates that much larger sets are possible by carefully choosing the squared norm $M$.
+
+**Recommended implementation patterns**:
+-   **Numpy**: Use `numpy.ndarray` for efficient storage and vectorized operations on 11-dimensional points.
+-   **`scipy.spatial.KDTree`**: For efficient nearest neighbor queries. When adding a new point, a KD-tree can quickly find existing points that are close, allowing rapid checking of the $D_{min}$ constraint.
+-   **Combinatorial Generators**: Functions from `itertools` (e.g., `permutations`, `product`, `combinations`) are highly useful for generating candidate points based on specific coordinate patterns.
+-   **Caching/Memoization**: Cache computed norms and distances to avoid redundant calculations, especially in iterative search processes.
+-   **Modular Design**: Separate concerns into functions for generating candidate points, checking conditions, and the main search/construction loop.
+
+# PROMPT-BLOCK-END

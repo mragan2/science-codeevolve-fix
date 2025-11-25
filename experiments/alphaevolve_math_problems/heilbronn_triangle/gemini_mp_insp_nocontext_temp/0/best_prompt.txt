@@ -1,0 +1,160 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a classical problem in discrete geometry that asks for the optimal placement of n points to maximize the minimum triangle area formed by any three points.
+
+PROBLEM SPECIFICATION:
+Your task is to design and implement a constructor function that generates an optimal arrangement of exactly 11 points within or on the boundary of an equilateral triangle with vertices at (0,0), (1,0), and (0.5, sqrt(3)/2).
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: Area of the smallest triangle among all point triplets (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: min_area_normalized / 0.0366 (BENCHMARK COMPARISON - maximize above 1.0)
+3. **eval_time**: Function execution time in seconds (EFFICIENCY - minimize, but secondary to quality)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary computation), `platypus` (NSGA-II)
+- **Metaheuristics**: `scikit-opt` (particle swarm, genetic algorithms), `nevergrad` (gradient-free optimization), `optuna` (Bayesian optimization)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay triangulation), `triangle` (mesh generation)
+- **Constraint programming**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `python-constraint`
+- **High-performance**: `cython` (C extensions), `numexpr` (fast numerical expressions)
+- **Quasi-random sampling**: `sobol_seq` for low-discrepancy point generation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem asks to place `n` points in a given domain `D` such that the minimum area of any triangle formed by three of these points is maximized. For this problem, `n = 11`, and the domain `D` is an equilateral triangle with vertices at (0,0), (1,0), and (0.5, sqrt(3)/2). The area of this specific equilateral triangle is `sqrt(3)/4`.
+
+The objective function to maximize is `A_min`, the smallest area among all `n choose 3` possible triangles. This `A_min` is then normalized by dividing by the area of the bounding equilateral triangle, `sqrt(3)/4`. The current best-known normalized minimum area for `n=11` in an equilateral triangle is approximately `0.0366`. This problem is known to be computationally challenging due to its combinatorial nature and the non-differentiability of the objective function.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Given the problem's complexity (non-differentiable objective, high-dimensional search space, combinatorial aspect), metaheuristic approaches are typically the most effective.
+
+1.  **Metaheuristics**:
+    *   **Simulated Annealing (SA)**: A robust method for global optimization. It can escape local minima by allowing "uphill" moves with a probability that decreases over time.
+        *   **State**: The `(n, 2)` array of point coordinates.
+        *   **Neighbor generation**: Perturb one or more points randomly (e.g., add Gaussian noise) and ensure they stay within the triangle.
+        *   **Cooling schedule**: Exponential or linear decay for temperature.
+    *   **Genetic Algorithms (GA)**: A population-based optimization algorithm.
+        *   **Encoding**: Each individual in the population is an array of `(n, 2)` point coordinates.
+        *   **Crossover**: Combine point sets from two "parent" solutions.
+        *   **Mutation**: Randomly perturb points in a solution, similar to SA's neighbor generation.
+        *   **Selection**: Choose individuals based on their fitness (min_area_normalized).
+    *   **Particle Swarm Optimization (PSO)**: Another population-based method where particles (solutions) move through the search space based on their own best-known position and the swarm's best-known position.
+    *   **Gradient-free Optimization**: Libraries like `scipy.optimize.minimize` with methods like `Powell`, `COBYLA`, or `Nelder-Mead` can be used for local refinement, especially in a hybrid approach after a metaheuristic finds promising regions. `nevergrad` also offers robust gradient-free optimizers.
+
+2.  **Hybrid Approaches**: Combine a global search metaheuristic (SA, GA) to find good candidate regions with a local search method (e.g., Nelder-Mead) to fine-tune the points for the best solutions found.
+
+3.  **Initial Point Generation**:
+    *   **Random Uniform**: Generate points uniformly within the triangle.
+    *   **Quasi-random (Sobol sequences)**: Use `sobol_seq` to generate low-discrepancy points, which can provide a better initial spread than purely random points. This can be beneficial for starting metaheuristics.
+
+**Recommended implementation patterns**:
+
+1.  **Point Representation**: Use a `numpy` array of shape `(11, 2)` for point coordinates.
+2.  **Triangle Area Calculation**: For three points `P1=(x1, y1)`, `P2=(x2, y2)`, `P3=(x3, y3)`, the area `A` can be calculated as `0.5 * abs(x1*(y2 - y3) + x2*(y3 - y1) + x3*(y1 - y2))`.
+3.  **Finding Minimum Area**:
+    *   Use `itertools.combinations(range(n), 3)` to efficiently iterate over all unique triplets of points.
+    *   Calculate the area for each triplet and track the minimum.
+4.  **Boundary Constraints**: Points must remain within or on the boundary of the equilateral triangle.
+    *   The triangle vertices are (0,0), (1,0), and (0.5, sqrt(3)/2).
+    *   A point `(x, y)` is inside or on the boundary if:
+        *   `y >= 0`
+        *   `y <= np.sqrt(3) * x` (line from (0,0) to (0.5, sqrt(3)/2))
+        *   `y <= -np.sqrt(3) * (x - 1)` (line from (1,0) to (0.5, sqrt(3)/2))
+    *   Implement a projection mechanism or a penalty function in the objective if points move outside during optimization. Rejection sampling can also be used during perturbation.
+5.  **Optimization Loop Structure**:
+    *   Define an objective function `evaluate_points(points: np.ndarray) -> float` that returns the `min_area_normalized`.
+    *   Initialize a set of points (e.g., randomly or using Sobol sequences).
+    *   Implement the chosen metaheuristic (SA/GA/PSO) loop:
+        *   Generate new candidate points (perturbation/crossover/mutation).
+        *   Ensure points satisfy boundary conditions.
+        *   Evaluate the candidates using `evaluate_points`.
+        *   Update the current best solution based on the metaheuristic's rules.
+    *   Run for a sufficient number of iterations.
+
+VALIDATION FRAMEWORK:
+1.  **`calculate_min_triangle_area(points)` function**: This helper function should take an `(n, 2)` numpy array of points and return the raw minimum area.
+2.  **Normalization**: The raw minimum area should be divided by `(np.sqrt(3) / 4)` to get `min_area_normalized`.
+3.  **Reproducibility**: Ensure all stochastic components (e.g., initial point generation, perturbation in SA/GA) use a fixed random seed (e.g., `np.random.seed(42)`) for deterministic results as required.
+4.  **Output Check**: Verify the final `points` array has shape `(11, 2)` and all points lie within the specified equilateral triangle.
+
+CONSTRAINTS AND CRITICAL REQUIREMENTS:
+*   **Number of points**: Exactly 11.
+*   **Domain**: Equilateral triangle with vertices (0,0), (1,0), and (0.5, sqrt(3)/2).
+*   **Objective**: Maximize the `min_area_normalized`. The target benchmark is `0.0366`.
+*   **Output**: The function must return a `np.ndarray` of shape `(11, 2)` containing the optimal point coordinates.
+*   **Efficiency**: While quality is primary, the solution should aim for reasonable execution time (e.g., within a few seconds, given `eval_time` is secondary). Vectorized NumPy operations are highly recommended.
+*   **Determinism**: Any use of randomness must be seeded.
+=======
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem seeks to arrange `n` points within a given domain `D` such that the smallest area of any triangle formed by three of these points is maximized. In this specific instance, `n = 11`, and the domain `D` is an equilateral triangle with vertices at (0,0), (1,0), and (0.5, `sqrt(3)/2`). The area of this specific bounding triangle is `sqrt(3)/4`.
+
+The primary objective is to maximize `A_min`, which is the minimum area found among all `n choose 3` possible triangles. For evaluation, `A_min` is then normalized by dividing it by the area of the bounding equilateral triangle, `sqrt(3)/4`. For `n=11` within an equilateral triangle, the current best-known normalized minimum area is approximately `0.0366`. This problem is notoriously difficult due to its high-dimensional, non-convex, and non-differentiable search space, making exact analytical solutions elusive for larger `n`.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Given the problem's inherent complexity, non-differentiable objective function, and combinatorial nature, metaheuristic optimization algorithms are generally the most effective approach.
+
+1.  **Metaheuristics (Global Search)**:
+    *   **Simulated Annealing (SA)**: A robust method for escaping local minima.
+        *   **State Representation**: The current arrangement of `n` points as a `(n, 2)` NumPy array.
+        *   **Neighbor Generation**: Propose a new state by perturbing one or more points (e.g., adding Gaussian noise) and ensuring they remain within the triangular domain.
+        *   **Cooling Schedule**: Implement a suitable temperature decay function (e.g., exponential or linear) to control exploration vs. exploitation.
+    *   **Genetic Algorithms (GA)**: A population-based evolutionary approach suitable for exploring diverse solutions.
+        *   **Individual Encoding**: Each individual in the population represents an `(n, 2)` array of point coordinates.
+        *   **Genetic Operators**: Design crossover (combining point sets from two parent solutions) and mutation (randomly perturbing points within an individual) operators.
+        *   **Selection**: Employ a selection mechanism (e.g., tournament, roulette wheel) based on the `min_area_normalized` fitness.
+    *   **Particle Swarm Optimization (PSO)**: Another population-based metaheuristic where "particles" move through the search space guided by their own best-known position and the overall best-known position in the swarm.
+
+2.  **Hybrid Approaches**: Combine a global search metaheuristic (like SA or GA) to identify promising regions of the search space, followed by a local optimization method (e.g., `scipy.optimize.minimize` with `Nelder-Mead`, `Powell`, or `COBYLA` methods, or `nevergrad` for gradient-free local refinement) to fine-tune the point positions for the best solutions found.
+
+3.  **Initial Point Generation**:
+    *   **Random Uniform**: Distribute points uniformly at random within the equilateral triangle.
+    *   **Quasi-random Sequences (Sobol)**: Utilize `sobol_seq` to generate low-discrepancy sequences. These provide a more even distribution of initial points across the search space compared to purely random samples, which can improve the starting quality for metaheuristics.
+
+**Recommended implementation patterns**:
+
+1.  **Point Data Structure**: Represent the `n` points as a `numpy` array of shape `(11, 2)`, where each row is `[x, y]`.
+2.  **Triangle Area Calculation**: For three points `P1=(x1, y1)`, `P2=(x2, y2)`, `P3=(x3, y3)`, the area `A` can be efficiently computed using the determinant formula: `A = 0.5 * abs(x1*(y2 - y3) + x2*(y3 - y1) + x3*(y1 - y2))`.
+3.  **Minimum Area Determination**:
+    *   Leverage `itertools.combinations(range(n), 3)` to generate all unique triplets of point indices.
+    *   Iterate through these combinations, calculate the area for each triplet, and track the overall minimum area.
+4.  **Boundary Constraints**: Ensure all points `(x, y)` remain within or on the boundary of the equilateral triangle defined by (0,0), (1,0), and (0.5, `sqrt(3)/2`).
+    *   The conditions for a point `(x, y)` to be inside or on the boundary are:
+        *   `y >= 0`
+        *   `y <= np.sqrt(3) * x` (equation of the line connecting (0,0) and (0.5, `sqrt(3)/2`))
+        *   `y <= -np.sqrt(3) * (x - 1)` (equation of the line connecting (1,0) and (0.5, `sqrt(3)/2`))
+    *   Implement a mechanism to handle points that move outside the boundary during optimization:
+        *   **Projection**: Project points back onto the nearest boundary.
+        *   **Penalty Function**: Add a penalty to the objective function if points violate constraints.
+        *   **Rejection Sampling**: Simply reject proposed moves that place points outside the domain.
+5.  **Optimization Loop Structure**:
+    *   Define an objective function, e.g., `calculate_normalized_min_area(points: np.ndarray) -> float`, which takes the `(n, 2)` point array and returns the `min_area_normalized`.
+    *   Initialize an initial set of `n` points (e.g., using Sobol sequences or random uniform distribution).
+    *   Implement the chosen metaheuristic's iterative loop:
+        *   Generate new candidate point configurations.
+        *   Apply boundary constraint handling.
+        *   Evaluate candidates using the objective function.
+        *   Update the current best solution based on the metaheuristic's rules.
+    *   Run the optimization for a sufficient number of iterations or until a convergence criterion is met.
+
+VALIDATION FRAMEWORK:
+1.  **`calculate_raw_min_area(points)` function**: A dedicated helper function that takes an `(n, 2)` NumPy array and returns the unnormalized minimum triangle area.
+2.  **Normalization Factor**: The area of the bounding equilateral triangle is `np.sqrt(3) / 4`. This value should be used to normalize the `raw_min_area`.
+3.  **Reproducibility**: To ensure deterministic results, all stochastic elements within the optimization (e.g., initial point generation, perturbation in SA/GA) **must** use a fixed random seed (e.g., `np.random.seed(42)`).
+4.  **Output Format Check**: The final output `np.ndarray` must have the exact shape `(11, 2)`.
+5.  **Boundary Check**: Verify that all points in the final solution are indeed within or on the boundary of the specified equilateral triangle.
+
+CONSTRAINTS AND CRITICAL REQUIREMENTS:
+*   **Number of Points**: Exactly `n=11` points.
+*   **Domain**: Equilateral triangle with vertices at (0,0), (1,0), and (0.5, `sqrt(3)/2`).
+*   **Primary Objective**: Maximize `min_area_normalized`. The benchmark ratio `min_area_normalized / 0.0366` should be maximized above `1.0`.
+*   **Output Format**: The function must return a `numpy.ndarray` of shape `(11, 2)` containing the `x, y` coordinates of the optimal points.
+*   **Efficiency**: While quality is paramount, the implementation should be reasonably efficient. Vectorized NumPy operations are strongly encouraged to minimize `eval_time`.
+*   **Determinism**: Any randomness used must be seeded for reproducibility.
+
+# PROMPT-BLOCK-END

@@ -1,0 +1,90 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a fundamental challenge in discrete geometry first posed by Hans Heilbronn in 1957.
+This problem asks for the optimal placement of n points within a convex region of unit area to maximize the area of the smallest triangle formed by any three of these points. 
+Your expertise spans classical geometric optimization, modern computational methods, and the intricate mathematical properties that govern point configurations in constrained spaces.
+
+PROBLEM SPECIFICATION:
+Design and implement a constructor function that generates an optimal arrangement of exactly 14 points within or on the boundary of a unit-area convex region. The solution must:
+- Place all 14 points within or on a convex boundary
+- Maximize the minimum triangle area among all C(14,3) = 364 possible triangles
+- Return deterministic, reproducible results
+- Execute efficiently within computational constraints
+
+BENCHMARK & PERFORMANCE TARGET:
+- **CURRENT STATE-OF-THE-ART**: min_area_normalized = 0.0278 (achieved by AlphaEvolve algorithm)
+- **PRIMARY METRIC**: min_area_normalized = (smallest triangle area) / (convex hull area)
+- **SUCCESS CRITERION**: benchmark_ratio = min_area_normalized / 0.0278 > 1.0
+- **SIGNIFICANCE**: Even marginal improvements (benchmark_ratio > 1.01) represent meaningful advances in this notoriously difficult problem
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary algorithms), `nevergrad` (gradient-free optimization)
+- **Metaheuristics**: `scikit-opt` (PSO, GA, SA), `optuna` (Bayesian optimization), `hyperopt` (hyperparameter tuning)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay, Voronoi, ConvexHull), `trimesh` (mesh processing)
+- **Specialized algorithms**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `casadi` (nonlinear optimization)
+- **High-performance computing**: `cython` (C extensions), `dask` (parallel computing)
+- **Quasi-random sequences**: `sobol_seq` for low-discrepancy initialization
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: (Area of smallest triangle) / (Area of convex hull) [PRIMARY - MAXIMIZE]
+2. **benchmark_ratio**: min_area_normalized / 0.0278 [BENCHMARK COMPARISON - TARGET > 1.0]
+3. **eval_time**: Execution time in seconds [EFFICIENCY - secondary priority]
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+# PROMPT-BLOCK-START
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem seeks to maximize the minimum area of a triangle formed by any three points from a set of `n` points placed within a convex region of unit area. For `n=14`, the exact solution is unknown, making it an active area of computational research. The problem is known to be NP-hard in its general form due to the combinatorial nature of selecting triangles and the non-convex, non-differentiable objective function. Computational results provide strong lower bounds, with the current state-of-the-art for `n=14` in a unit square being `0.0278`. Optimal configurations tend to place points non-uniformly, often with several points lying on the boundary of the convex region, and avoiding exact collinearities. For simplicity and without loss of generality, assume the convex region is the unit square `[0,1]x[0,1]`, as results can be scaled.
+
+ADVANCED OPTIMIZATION STRATEGIES:
+Given the non-differentiable, highly multimodal, and computationally expensive nature of the objective function (calculating `min_area_normalized` involves `C(n,3)` triangle area computations and a convex hull calculation), gradient-based optimization methods are unsuitable. Instead, **metaheuristic global optimization algorithms** are required:
+*   **Evolutionary Algorithms (e.g., Genetic Algorithms, Differential Evolution)**: These population-based methods are well-suited for exploring complex search spaces. Libraries like `deap` or `scikit-opt` offer robust implementations. They involve initializing a population, evaluating fitness, and evolving solutions through selection, crossover, and mutation.
+*   **Simulated Annealing (SA)**: This algorithm explores the search space by accepting worse solutions with a decreasing probability, allowing it to escape local minima. `scikit-opt` provides an SA implementation.
+*   **Bayesian Optimization (`optuna`, `hyperopt`)**: These methods build a probabilistic model of the objective function to efficiently explore promising regions, suitable for expensive objective functions.
+*   **Hybrid Approaches**: Combining a global search method (like GA or SA) with a local refinement step (e.g., small, directed perturbations) can be highly effective.
+**Initialization**: The initial placement of points is crucial. Purely random initialization can be slow to converge. Preferable strategies include:
+*   **Low-discrepancy sequences**: `sobol_seq` can generate points that are more uniformly distributed than random points, providing a better starting spread.
+*   **Perturbed grid arrangements**: Starting with points on a grid and adding small random noise.
+**Constraint Handling**: Points must remain within the `[0,1]x[0,1]` bounds. This can be achieved by:
+*   **Clamping**: Simply clipping point coordinates to `[0,1]` after any mutation or movement.
+*   **Penalty methods**: Adding a penalty to the objective function if points move outside the bounds.
+
+GEOMETRIC INSIGHTS & HEURISTICS:
+*   **Triangle Area Calculation**: For three points `(x1, y1), (x2, y2), (x3, y3)`, the signed area can be calculated using the determinant formula: `0.5 * (x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2))`. The absolute value gives the area. This formula correctly yields zero for collinear points.
+*   **Convex Hull Area**: Use `scipy.spatial.ConvexHull` on the set of points. The `ConvexHull` object has an `area` attribute. Ensure robust handling for degenerate cases (e.g., all points collinear, resulting in a zero-area convex hull) by returning 0 `min_area_normalized` in such scenarios.
+*   **Point Distribution Heuristics**:
+    *   **Avoid Collinearity**: Any three collinear points will yield a triangle area of zero, immediately minimizing the objective function to zero.
+    *   **Boundary Points**: Optimal configurations often feature a significant number of points on the boundary of the convex region. Consider strategies that encourage points to move towards the boundary or explicitly place some points there.
+    *   **Even Distribution (with caveats)**: While points tend to be somewhat evenly distributed, this is not a strict rule. The goal is to avoid "empty" regions or clusters that could lead to very small triangles.
+*   **Computational Efficiency**: For `n=14`, `C(14,3) = 364` triangle area calculations are manageable for each objective function evaluation. The `scipy.spatial.ConvexHull` calculation is also efficient enough.
+
+**Recommended implementation patterns**:
+1.  **Objective Function**: Define a helper function `calculate_min_normalized_area(points: np.ndarray) -> float` that takes an `(N, 2)` NumPy array of points (assumed to be within `[0,1]x[0,1]`) and returns the `min_area_normalized`.
+    *   Inside this function:
+        *   Iterate through all combinations of 3 points using `itertools.combinations(range(N), 3)`.
+        *   Calculate the area for each triangle using the determinant formula.
+        *   Find the minimum of these triangle areas.
+        *   Compute the convex hull area of `points` using `scipy.spatial.ConvexHull(points).area`.
+        *   Return `(min_triangle_area / convex_hull_area)`. Handle potential `ZeroDivisionError` if `convex_hull_area` is zero (e.g., return 0.0).
+2.  **Main Optimization Loop**: The `heilbronn_convex14()` function should implement an iterative optimization process:
+    *   **Initialization**: Generate an initial set of 14 points. Consider using `sobol_seq.i4_sobol_generate` or `np.random.default_rng(seed=42).random((14, 2))` for a reproducible starting point.
+    *   **Optimization Algorithm**: Implement a metaheuristic, such as a basic Simulated Annealing or a Genetic Algorithm. A simple SA could involve:
+        *   Start with an initial temperature `T` and a cooling rate `alpha`.
+        *   Loop for a fixed number of iterations:
+            *   Generate a `new_points` configuration by perturbing the current `points` (e.g., adding small random noise to a randomly selected point, ensuring points stay within `[0,1]x[0,1]`).
+            *   Calculate `current_score = calculate_min_normalized_area(points)` and `new_score = calculate_min_normalized_area(new_points)`.
+            *   If `new_score > current_score`, accept `new_points`.
+            *   If `new_score <= current_score`, accept `new_points` with a probability `exp((new_score - current_score) / T)`.
+            *   Update `T = T * alpha`.
+            *   Keep track of the `best_points` found so far.
+    *   **Termination**: Run the optimization for a sufficient number of iterations.
+    *   **Return Value**: Return the `(14, 2)` NumPy array of the best point configuration found.
+3.  **Libraries**: Utilize `numpy` for array manipulation, `scipy.spatial.ConvexHull` for convex hull calculations, `itertools` for combinations, and potentially `sobol_seq` for initialization.
+
+# PROMPT-BLOCK-END
+
+    

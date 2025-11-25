@@ -1,0 +1,74 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+*   **Metaheuristic Optimization:** Given the problem's complexity (NP-hard, non-convex, many local optima) and the "AlphaEvolve" benchmark, metaheuristic approaches like Genetic Algorithms (GA), Evolutionary Strategies, or Simulated Annealing (SA) are highly recommended. These methods are well-suited for exploring large search spaces and escaping local optima.
+*   **Population-based Approach (e.g., Genetic Algorithm):** Maintain a population of candidate solutions (arrangements of 32 circles). Evolve this population over many generations using selection, crossover, and mutation operators. The `deap` library is an excellent choice for implementing GAs due to its flexible framework.
+*   **Objective Function with Penalties:** Transform the constrained maximization problem into an unconstrained one by defining a fitness function that maximizes the sum of radii while heavily penalizing any constraint violations (overlaps, out-of-bounds circles).
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Genetic Algorithm (GA) Details:**
+    *   **Individual Representation:** Each individual in the population should be represented as a flattened array or list of `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]`. This allows for straightforward application of genetic operators.
+    *   **Initialization:**
+        *   **Random:** Place circles with small random radii and positions within the unit square. Ensure initial radii are small enough (e.g., uniform random in `[0.001, 0.05]`) to prevent immediate massive overlaps, allowing the GA to grow them.
+        *   **Heuristic:** Consider initializing some circles on a coarse grid or with a 'jiggle' approach to encourage diverse starting points and potentially faster convergence.
+    *   **Fitness Function:** Define a function `evaluate(individual)` that calculates `fitness = sum(radii) - C_overlap * total_overlap_penalty - C_boundary * total_boundary_penalty`. The penalty constants (`C_overlap`, `C_boundary`) must be sufficiently large (e.g., 1000-10000) to ensure constraint satisfaction is heavily prioritized over radius maximization.
+    *   **Selection:** Use standard selection operators like `deap.tools.selTournament` to choose parents for the next generation.
+    *   **Crossover (Recombination):** Apply genetic operators like `deap.tools.cxBlendA` (blended crossover) or `deap.tools.cxTwoPoint` to combine properties of two parent solutions. Blended crossover is often effective for real-valued parameters.
+    *   **Mutation:** Use `deap.tools.mutGaussian` to add Gaussian noise to circle positions and radii. Ensure mutation operators respect the basic bounds (e.g., radii must be positive, positions within [0,1]). Apply a relatively low mutation rate.
+*   **Simulated Annealing (SA):** As an alternative or complementary strategy (e.g., for local refinement after a GA), SA can be effective for local search and escaping local minima. It perturbs a single solution and accepts worse solutions probabilistically, guided by a cooling schedule.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Constraint Penalization:**
+    *   **Overlap Penalty:** For any two circles `i` and `j`, calculate their center distance `d_ij = np.linalg.norm(circles[i, :2] - circles[j, :2])`. If `d_ij < ri + rj`, an overlap exists. The penalty for this pair can be `max(0.0, ri + rj - d_ij)`. Sum these penalties over all unique overlapping pairs.
+    *   **Boundary Containment Penalty:** For each circle `(x, y, r)`, check if `x < r` or `x > 1-r` or `y < r` or `y > 1-r`. The penalty can be calculated as `max(0.0, r - x, x - (1 - r), r - y, y - (1 - r))`. Sum these penalties for all violations.
+*   **Efficiency for Distance Calculations:** For 32 circles, an O(N^2) pairwise distance calculation is acceptable. `scipy.spatial.distance.pdist` can efficiently compute all pairwise Euclidean distances. For very large N, spatial indexing structures like `scipy.spatial.KDTree` or `rtree` could be considered to find nearest neighbors more efficiently, but are likely overkill here.
+*   **Optimal Packing Tendencies:** Optimal packings often exhibit local hexagonal arrangements. While a GA doesn't explicitly encode this, allowing circles to "repel" each other (e.g., through penalties) naturally encourages such structures. The problem is known to be very challenging, and achieving the benchmark requires sophisticated exploration and tuning.
+
+VALIDATION FRAMEWORK:
+*   **Output Format:** The `circle_packing32` function must return an `np.ndarray` of shape `(32, 3)`, where each row `[x, y, r]` represents a circle's center coordinates and radius.
+*   **Fitness Calculation (internal to optimizer):**
+    *   `sum_radii = np.sum(circles[:, 2])`
+    *   `total_overlap_penalty`: Sum `max(0.0, r_i + r_j - d_ij)` for all `i < j` where `d_ij` is the distance between centers.
+    *   `total_boundary_penalty`: Sum `max(0.0, r - x, x - (1 - r), r - y, y - (1 - r))` for each circle.
+    *   `fitness = sum_radii - C_overlap * total_overlap_penalty - C_boundary * total_boundary_penalty`. This `fitness` value is what the optimizer will attempt to maximize.
+*   **Final Solution Verification:** After optimization, the best found solution should be explicitly checked for *strict* compliance with the problem's hard constraints:
+    *   All `r > 0`.
+    *   `r <= x <= 1-r` and `r <= y <= 1-r` for all circles (hard boundary check).
+    *   `√[(xi-xj)² + (yi-yj)²] >= ri + rj` for all `i≠j` (hard non-overlap check, allowing for a small epsilon tolerance due to floating point arithmetic).
+    *   If any hard constraint is violated significantly, the penalty constants or optimization parameters were insufficient, and further tuning or iterations are required.
+
+# PROMPT-BLOCK-END
+    

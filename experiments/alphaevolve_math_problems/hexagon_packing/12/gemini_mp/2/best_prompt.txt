@@ -1,0 +1,106 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on hexagon packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 12 unit regular hexagons within a larger regular hexagon, maximizing 1/outer_hex_side_length (equivalently minimizing the outer hexagon's side length).
+
+PROBLEM CONTEXT:
+- Target: Establish new state-of-the-art for 12-hexagon packing (no known benchmark)
+- Constraint: All 12 inner hexagons must be unit regular hexagons (side length = 1) that are fully contained within the outer hexagon with no overlaps
+- Mathematical formulation: For hexagon i at position (xi, yi) with rotation θi:
+  * Non-overlap: All pairs of inner hexagons must be disjoint
+  * Containment: All vertices of inner hexagons must lie within the outer hexagon
+  * Objective: maximize 1/R where R is the outer hexagon side length
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, matplotlib, shapely
+**Additional useful packages**:
+- **Geometric computing**: 
+  * `shapely` (polygon operations, intersection testing, containment checks)
+  * `scipy.spatial` (distance calculations, geometric queries)
+  * `matplotlib.patches` (hexagon visualization and symmetry analysis)
+- **Symmetry handling**:
+  * Custom functions for generating symmetric configurations
+  * Group theory utilities for constraint enforcement
+  * Symmetry-aware optimization operators
+- **Optimization**: 
+  * `scipy.optimize` (constrained optimization, global methods)
+  * `deap` (evolutionary algorithms with custom symmetry operators)
+  * `platypus` (multi-objective optimization)
+- **Performance**: `numba` (JIT compilation for 12-hexagon calculations), `joblib`
+
+PERFORMANCE METRICS:
+1. **inv_outer_hex_side_length**: 1/outer_hex_side_length (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: inverse_side_length / 0.2544 (progress toward beating SOTA)
+3. **eval_time**: Execution time for full evaluation
+
+TECHNICAL REQUIREMENTS:
+- **Reproducibility**: Deterministic results with proper random seeding
+
+# PROMPT-BLOCK-START
+  
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem of hexagon packing is highly non-convex with many local optima. Therefore, global optimization strategies are crucial.
+1.  **Evolutionary Algorithms (EAs)**: Given the complex search space and the need for global optima, EAs (e.g., Genetic Algorithms, Differential Evolution) are highly suitable. `deap` and `platypus` are excellent choices for implementing custom genetic operators and handling multi-objective aspects if desired (though here, it's single-objective).
+    *   **Custom Operators**: Design mutation and crossover operators that respect hexagonal symmetry and packing constraints.
+    *   **Symmetry-Aware Initialization**: Start with configurations that already exhibit D6h symmetry to bias the search towards good solutions.
+2.  **Symmetry Exploitation**: The optimal packing for a central hexagon and a ring of 6 (total 7) exhibits D6h symmetry. For 12 hexagons, it's highly probable that the optimal or near-optimal solution will also exhibit some form of D6h or C6 symmetry.
+    *   **Reduced Search Space**: Instead of optimizing 12 * (x, y, theta) = 36 parameters, optimize a smaller set of unique hexagons (e.g., 1 central, and 1-2 unique "orbital" hexagons) and generate the rest by rotation/reflection. This significantly reduces the dimensionality of the optimization problem.
+    *   **Objective Function Integration**: The objective function should generate a full 12-hexagon configuration from the reduced parameter set and then evaluate it.
+3.  **Constrained Optimization**: `scipy.optimize.minimize` with appropriate `constraints` and `bounds` can be used for local refinement after a global search, or as part of a hybrid approach.
+4.  **Simulated Annealing/Basin Hopping**: These methods (`scipy.optimize.basinhopping`) can also explore the global landscape effectively.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Unit Hexagon Properties**:
+    *   Side length `s = 1`.
+    *   Apothem (distance from center to midpoint of a side) `a = s * sqrt(3)/2 = sqrt(3)/2`.
+    *   Circumradius (distance from center to vertex) `R_c = s = 1`.
+    *   Area `A = (3 * sqrt(3) / 2) * s^2 = 3 * sqrt(3) / 2`.
+2.  **Hexagon Representation**: A hexagon can be defined by its center `(x, y)`, side length `s`, and rotation angle `theta`. Its 6 vertices can be computed from these parameters.
+3.  **Non-Overlap Condition**: Two unit hexagons `H_i` and `H_j` at `(x_i, y_i)` and `(x_j, y_j)` do not overlap if their `shapely.Polygon` representations are disjoint. **Crucially, for efficiency, always perform a quick preliminary check:** if the Euclidean distance between their centers `d = sqrt((x_i-x_j)^2 + (y_i-y_j)^2)` is greater than or equal to `2 * R_c = 2` (twice the circumradius), they *cannot* overlap, and the expensive `shapely` check can be entirely skipped. If `d < 2`, then a more precise check using `shapely.Polygon.overlaps()` is required. Note that they definitely overlap if `d < 2 * a = sqrt(3)` (twice the apothem). This two-step check significantly reduces the number of expensive `shapely` calls, which is vital for performance within an optimization loop.
+4.  **Containment Condition**: All vertices of all 12 inner hexagons must be contained within the outer hexagon. The outer hexagon's side length `R` is the key objective. The outer hexagon is also centered at `(0,0)` and unrotated for simplicity, as the entire packing can be rotated and translated without changing `R`. The outer hexagon's `R` is determined by the maximum distance from `(0,0)` to any vertex of any inner hexagon, adjusted for the outer hexagon's apothem/circumradius relationship. Specifically, `R` must be at least `max_distance_from_origin_to_any_inner_vertex / R_c_outer`, considering the orientation of the outer hexagon. Or more simply, if the outer hexagon is aligned with its sides horizontal/vertical, its apothem will be `R * sqrt(3)/2`. The maximum absolute x-coordinate of any inner hexagon vertex must be less than `R` and maximum absolute y-coordinate of any inner hexagon vertex must be less than `R * sqrt(3)/2`.
+5.  **D6h Symmetry**: A regular hexagon has D6h point group symmetry. Optimal packings often leverage this. For 12 hexagons, a common arrangement might involve a central hexagon, a ring of 6, and a partial outer ring, or a different arrangement that still exhibits 6-fold rotational symmetry.
+
+**Recommended implementation patterns:**
+To address the high `eval_time` and achieve efficient exploration of the search space, apply JIT compilation where possible.
+1.  **Hexagon Class/Utility Functions**:
+    *   Create a `Hexagon` class or functions to generate `shapely.geometry.Polygon` objects from `(x, y, theta, side_length)`.
+    *   Methods for getting vertices, checking intersection, and checking containment.
+    *   **Apply `@numba.jit` to pure numerical geometry functions** (e.g., `get_hexagon_vertices`) to significantly speed up calculations that do not involve `shapely` objects.
+2.  **Objective Function `calculate_outer_hex_side_length(inner_hex_params)`**:
+    *   Input: A flat array of parameters `[x1, y1, theta1, x2, y2, theta2, ..., x12, y12, theta12]` (or a reduced set if symmetry is used).
+    *   Steps:
+        *   Construct `shapely.Polygon` objects for all 12 inner hexagons.
+        *   Check for overlaps: If any `H_i.intersects(H_j)` for `i != j`, add a large penalty to the objective or return infinity (invalid configuration).
+        *   Calculate the bounding box or convex hull of all inner hexagons.
+        *   Determine the minimum `R` of an outer hexagon (centered at `(0,0)`, unrotated) that contains all inner hexagons. This involves finding the maximum extent of the inner hexagons along the 6 principal directions of a hexagon.
+        *   Return `R`. The optimization aims to minimize this `R`. The problem objective is `1/R`.
+    *   **It is critical to apply `@numba.jit(nopython=True)` to the objective function itself**, or at least its most computationally intensive numerical parts, if `shapely` calls can be isolated or optimized separately. This is crucial for performance with Evolutionary Algorithms.
+3.  **Symmetry Functions**: Functions to transform a base set of `(x,y,theta)` for a few unique hexagons into the full 12-hexagon set by applying rotations (e.g., `np.deg2rad(60 * k)`) and reflections.
+    *   These can also benefit greatly from `@numba.jit`.
+4.  **Optimization Loop**: Integrate the objective function with a chosen optimizer (`deap`, `scipy.optimize.basinhopping`, etc.).
+5.  **Visualization**: Use `matplotlib.patches.RegularPolygon` to visualize the packing at different stages of the optimization or for the final result.
+
+VALIDATION FRAMEWORK:
+1.  **Non-Overlap Check**: For the final proposed configuration, rigorously check that `shapely.Polygon(H_i).disjoint(shapely.Polygon(H_j))` for all `i != j`. Any overlap means the solution is invalid.
+2.  **Containment Check**: Verify that all vertices of all inner hexagons are within the calculated outer hexagon. This can be done by checking `outer_hex_polygon.contains(inner_hex_polygon)` or by iterating through all inner vertices and checking if `outer_hex_polygon.contains(Point(vertex_x, vertex_y))`.
+3.  **Numerical Stability**: Be mindful of floating-point precision issues when checking for exact overlaps or touches. Use small epsilon values for comparisons if necessary.
+4.  **Visual Inspection**: Plot the final packing using `matplotlib` to visually confirm correctness and identify potential issues.
+
+PROBLEM-SPECIFIC CONSIDERATIONS:
+1.  **Degrees of Freedom**: Each of the 12 unit hexagons has 3 degrees of freedom (x, y, rotation). This gives 36 parameters. Exploiting symmetry is critical to managing this search space.
+2.  **Central Hexagon**: It is often optimal to place one hexagon at the origin `(0,0)` and fix its rotation to `0` or `30` degrees. This reduces the search space by 3 parameters and simplifies symmetry operations.
+3.  **Optimal Arrangement for 12**: For `N=1, 7, 19, ...` hexagons, the optimal arrangement forms a larger hexagon. For `N=12`, it's an "awkward" number. Common starting points might be:
+    *   A central hexagon, a ring of 6 around it, and 5 more placed optimally in the remaining space.
+    *   A cluster of 4 or 5 in the center, and the rest arranged around them.
+    *   The optimal configuration is unlikely to be a simple grid.
+4.  **Rotations (`theta_i`)**: Allowing individual rotations for inner hexagons is crucial for achieving optimal density, as it enables finer adjustments for packing.
+
+GEOMETRIC TARGETS AND BENCHMARKS:
+1.  **Theoretical Lower Bound (Area-based)**: The total area of 12 unit hexagons is `12 * (3 * sqrt(3) / 2) = 18 * sqrt(3) approx 31.1769`. The area of the outer hexagon is `(3 * sqrt(3) / 2) * R^2`. Thus, `R^2 >= 12`, so `R >= sqrt(12) = 2 * sqrt(3) approx 3.464`. This is a very loose lower bound, as it assumes perfect tessellation.
+2.  **Estimated Optimal R**: Based on studies of similar packing problems, a reasonable target for `R` for 12 unit hexagons would likely be in the range of `3.5` to `4.5`. The `0.2544` benchmark suggests an `R` of `1/0.2544 approx 3.93`. This is a challenging target.
+3.  **SOTA for 7 Hexagons**: For 7 unit hexagons (1 central + 6 around it), the outer hexagon side length is `R=3`. This gives an `inv_outer_hex_side_length` of `1/3 approx 0.3333`. This can serve as a sanity check. A solution for 12 hexagons must yield a smaller `inv_outer_hex_side_length` (larger `R`) than for 7 hexagons.
+4.  **Initial Guess for `R`**: An initial `R` of `8` is far too large. A more realistic initial guess might be `R=4.5` to `5.0` for a rough, unoptimized packing. The optimization process should aim to reduce this significantly.
+=======
+
+# PROMPT-BLOCK-END
+
+    

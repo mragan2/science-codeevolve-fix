@@ -1,0 +1,104 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 26 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.6358627564136983
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 26 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.6358627564136983 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem of circle packing is a challenging global optimization task due to its non-convex nature and the presence of numerous local optima. A robust approach is required to beat the benchmark.
+
+1.  **Evolutionary Algorithms (EAs)**: Given the problem's complexity, metaheuristics like Genetic Algorithms (GA) or Differential Evolution are highly suitable. These algorithms are effective at exploring large, complex search spaces.
+    *   **Representation**: A "chromosome" can be a flattened `numpy` array representing all circle parameters: `(x1, y1, r1, x2, y2, r2, ..., xN, yN, rN)`.
+    *   **Fitness Function**: This is the core of the EA. It should primarily maximize `sum_radii` but *heavily penalize* any constraint violations (overlap, out-of-bounds). A common approach is `fitness = sum_radii - C * (overlap_penalty + containment_penalty)`, where `C` is a large constant (e.g., 1000 or 10000) to ensure infeasible solutions have very low fitness. The penalties should be proportional to the magnitude of the violation.
+    *   **Operators**: Standard genetic operators like uniform or simulated binary crossover, and polynomial or Gaussian mutation can be applied to `x`, `y`, and `r` values. Ensure mutation operators produce `r > 0` and ideally keep `x,y` within `[r, 1-r]` (or let the penalty function handle violations).
+    *   **Tooling**: `deap` (Distributed Evolutionary Algorithms in Python) is an excellent and flexible library for implementing EAs, providing robust tools for population management, selection, crossover, and mutation.
+
+2.  **Hybrid Approaches**: Combining global search (like EAs) with local optimization can significantly improve results by refining the best solutions found by the global search.
+    *   After an EA finds promising candidate solutions (e.g., the best individuals in the final population), use a gradient-based local optimizer (e.g., `scipy.optimize.minimize` with methods like SLSQP, COBYLA, or L-BFGS-B) to fine-tune these solutions. The local optimizer would take a candidate packing and attempt to slightly adjust `x, y, r` to further increase `sum_radii` while satisfying constraints. This requires defining the objective and constraints for the local solver.
+
+3.  **Physics-based Relaxation (as initialization or refinement)**:
+    *   Model circles as particles with repulsive forces if they overlap, and the square boundaries as walls.
+    *   Gradually increase radii while simulating these forces to resolve overlaps and push circles into stable, packed positions. `pymunk` could be considered for a full physics engine, or a custom `numpy`/`numba` implementation for fine-grained control over forces and integration steps. This strategy can provide excellent initial populations for EAs or refine existing solutions.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Distance Squared Optimization**: The non-overlap constraint `√[(xi-xj)² + (yi-yj)²] ≥ ri + rj` should be implemented using squared distances to avoid computationally expensive square root operations: `(xi-xj)² + (yi-yj)² ≥ (ri + rj)²`. This is a critical performance optimization.
+2.  **Constraint Handling**:
+    *   **Penalty Functions (detailed)**: For the fitness function, the penalty for overlap could be `sum(max(0, (ri + rj)**2 - ((xi-xj)**2 + (yi-yj)**2)) for all overlapping pairs)`. Similarly, for containment, `sum(max(0, r - x, x - (1-r), r - y, y - (1-r)) for all out-of-bounds circles)`. These penalties should be weighted appropriately.
+    *   **Soft Constraints**: Allow solutions to be temporarily infeasible during optimization, relying on the penalty function to guide the search towards feasible regions.
+3.  **Initialization Strategy**:
+    *   Start with small circles placed randomly within the square, ensuring initial containment (`r <= x <= 1-r`, `r <= y <= 1-y`).
+    *   Consider a "growth" strategy where circles start very small and are gradually expanded, with overlaps resolved dynamically, to generate a denser initial packing.
+    *   For `N=26`, a simple grid-like initial placement might be a reasonable starting point before applying optimization.
+4.  **Symmetry**: While `N=26` doesn't yield perfectly simple hexagonal packing in a square, optimal solutions for a square often exhibit some form of symmetry or clustered arrangements. Although directly hard-coding symmetry might be restrictive, observing it in partial solutions can inform mutation strategies or initial guesses.
+5.  **Contact Graph**: Optimal packings typically feature many circles in contact with each other and/or the boundaries. The optimization algorithm should naturally push circles into these contact configurations.
+
+**Recommended implementation patterns:**
+1.  **Data Structure**: Represent the `N` circles as a `numpy` array of shape `(N, 3)`, where each row `[x, y, r]` defines a circle's center and radius. This allows for efficient vectorized operations.
+2.  **Vectorized Calculations**: Utilize `numpy` for all distance, overlap, and containment calculations to achieve high performance. Avoid explicit Python loops where `numpy` operations can be used (e.g., `scipy.spatial.distance.pdist` or `scipy.spatial.distance.cdist` for pairwise distances, or custom vectorized functions for all-pairs calculations).
+3.  **`numba` for Critical Sections**: For any remaining performance bottlenecks, particularly in fitness evaluation, penalty calculations, or physics simulation loops, consider decorating functions with `@numba.jit` to compile them to optimized machine code. This is crucial for keeping `eval_time` reasonable.
+4.  **Modularity**: Decompose the solution into clear, testable functions:
+    *   `_check_containment_violations(circles)`: Calculates containment penalty for all circles.
+    *   `_check_overlap_violations(circles)`: Calculates pairwise overlap penalties.
+    *   `_calculate_fitness(circles)`: Combines `sum_radii` with penalties from the above functions. This will be the core of the optimization loop.
+    *   `_initialize_population(N)`: Generates initial random (but valid or near-valid) circle configurations for the EA.
+5.  **Reproducibility**: Ensure `np.random.seed()` is set at the beginning of the `circle_packing26` function if stochastic methods are used, to guarantee deterministic results for the same input parameters.
+
+VALIDATION FRAMEWORK:
+Implement a separate validation function `validate_packing(circles: np.ndarray) -> tuple[bool, float, dict]` that rigorously checks a given `circles` array (shape `(N, 3)`) against all constraints. This function will be critical for verifying the final solution.
+
+1.  **Function Signature**:
+    ```python
+    def validate_packing(circles: np.ndarray) -> tuple[bool, float, dict]:
+        # circles: np.array of shape (N, 3) where N=26
+        # Returns: (is_valid_packing, total_sum_radii, violation_details)
+    ```
+    *   `is_valid_packing`: `True` if all constraints are met within a small tolerance, `False` otherwise.
+    *   `total_sum_radii`: The sum of radii `np.sum(circles[:, 2])`.
+    *   `violation_details`: A dictionary detailing any specific constraint violations found (e.g., `{'overlap_count': X, 'out_of_bounds_count': Y, 'max_overlap_depth': Z, 'min_radius_violation_count': W, ...}`).
+
+2.  **Containment Check**: For each circle `(xi, yi, ri)` in `circles`:
+    *   Check `ri > 0` (radii must be positive).
+    *   Check `ri <= xi <= 1 - ri`
+    *   Check `ri <= yi <= 1 - ri`
+    *   Use a small epsilon (e.g., `1e-9`) for comparisons to account for floating-point inaccuracies: e.g., `r < x - epsilon`, `x < 1 - r + epsilon`, etc.
+
+3.  **Non-overlap Check**: For every distinct pair of circles `i` and `j` (i.e., `j > i`):
+    *   `xi, yi, ri = circles[i]`
+    *   `xj, yj, rj = circles[j]`
+    *   `dist_sq = (xi - xj)**2 + (yi - yj)**2`
+    *   `min_dist_sq = (ri + rj)**2`
+    *   Check `dist_sq >= min_dist_sq - 1e-9`. If `dist_sq < min_dist_sq - 1e-9`, it's an overlap.
+
+4.  **Report Violations**: The `violation_details` dictionary should quantify the extent of any violations (e.g., sum of penetration depths, count of out-of-bounds circles), which is useful for debugging and understanding the quality of the packing.
+
+# PROMPT-BLOCK-END
+    

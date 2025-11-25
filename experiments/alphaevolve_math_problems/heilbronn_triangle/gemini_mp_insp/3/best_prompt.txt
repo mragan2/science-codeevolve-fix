@@ -1,0 +1,82 @@
+SETTING:
+You are an expert computational geometer and optimization specialist with deep expertise in the Heilbronn triangle problem - a classical problem in discrete geometry that asks for the optimal placement of n points to maximize the minimum triangle area formed by any three points.
+
+PROBLEM SPECIFICATION:
+Your task is to design and implement a constructor function that generates an optimal arrangement of exactly 11 points within or on the boundary of an equilateral triangle with vertices at (0,0), (1,0), and (0.5, sqrt(3)/2).
+
+PERFORMANCE METRICS:
+1. **min_area_normalized**: Area of the smallest triangle among all point triplets (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: min_area_normalized / 0.0366 (BENCHMARK COMPARISON - maximize above 1.0)
+3. **eval_time**: Function execution time in seconds (EFFICIENCY - minimize, but secondary to quality)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Advanced optimization**: `deap` (evolutionary computation), `platypus` (NSGA-II)
+- **Metaheuristics**: `scikit-opt` (particle swarm, genetic algorithms), `nevergrad` (gradient-free optimization), `optuna` (Bayesian optimization)
+- **Geometric computation**: `shapely` (computational geometry), `scipy.spatial` (Delaunay triangulation), `triangle` (mesh generation)
+- **Constraint programming**: `cvxpy` (convex optimization), `pyomo` (optimization modeling), `python-constraint`
+- **High-performance**: `cython` (C extensions), `numexpr` (fast numerical expressions)
+- **Quasi-random sampling**: `sobol_seq` for low-discrepancy point generation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:
+The Heilbronn triangle problem asks to find the optimal arrangement of `n` points within a given geometric domain to maximize the minimum area of any triangle formed by three of these `n` points.
+For this task, `n=11`, and the domain is a unit equilateral triangle with specific vertices.
+The vertices of the unit equilateral triangle are: `V1=(0,0)`, `V2=(1,0)`, and `V3=(0.5, np.sqrt(3)/2)`.
+The area of this unit equilateral triangle is `np.sqrt(3)/4`.
+The problem is a challenging, non-convex continuous optimization problem, meaning it has many local optima, and finding the global optimum often requires advanced search techniques. The value `0.0366` refers to a known good (or potentially optimal) normalized minimum area for `n=11` points in this specific domain. The `benchmark_ratio` is calculated as `min_area_normalized / 0.0366`.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Due to the non-convexity and high dimensionality of the search space, global optimization algorithms are necessary.
+1.  **Metaheuristic Algorithms**: These algorithms are well-suited for exploring complex landscapes and escaping local optima.
+    *   **Differential Evolution (DE)**: A robust and widely used population-based global optimization algorithm, available in `scipy.optimize.differential_evolution`. It's a strong candidate for this problem.
+    *   **Genetic Algorithms (GA)**: Another powerful evolutionary approach for global search (e.g., from `deap` or `scikit-opt`).
+    *   **Simulated Annealing (SA)** or **Particle Swarm Optimization (PSO)**: Also viable options for global exploration.
+2.  **Objective Function Design**: The chosen optimizer will typically minimize a function. Therefore, the objective function should return the negative of the minimum triangle area found among all triplets of points. If any point violates the domain constraints, the objective function must return a very large positive penalty value (e.g., `1e10`) to discourage invalid solutions.
+3.  **Constraint Handling**: Points must strictly remain within or on the boundary of the specified equilateral triangle. This is a critical requirement.
+    *   Define `bounds` for the optimizer that encompass the entire triangular domain (e.g., a rectangular bounding box). `differential_evolution` will operate within these rectangular bounds.
+    *   **Crucially**: The triangular domain itself must be enforced by incorporating a very strong penalty into the objective function (e.g., returning a very large positive value like `1e10` for minimization) if any point falls outside the strict triangular domain. This penalty is the primary mechanism to guide the optimizer away from invalid regions *within the rectangular bounds but outside the triangle*. The `EPSILON` used in the `is_point_in_equilateral_triangle` check for this penalty must be carefully chosen to align with the external validation tolerance (e.g., `1e-6`).
+
+**Recommended implementation patterns**:
+1.  **Point Representation**: Represent the `n` points as a `np.ndarray` of shape `(n, 2)`. For optimization, this array will typically be flattened to `(n*2,)`.
+2.  **Geometric Helper Functions**:
+    *   `calculate_triangle_area(p1, p2, p3)`: A function to compute the area of a triangle given three 2D points.
+    *   `is_point_in_equilateral_triangle(point)`: A function to check if a single 2D point lies within or on the boundary of the unit equilateral triangle. This function should use small epsilon values for robust floating-point comparisons.
+    *   `get_min_triangle_area(points)`: A function that iterates through all `math.comb(n, 3)` combinations of points (using `itertools.combinations`) and returns the minimum area.
+3.  **Optimizer Wrapper**: Create an `objective_function(flat_points, n_points)` that:
+    *   Takes the flattened point array `flat_points`.
+    *   Reshapes it to `(n_points, 2)`.
+    *   Performs the `is_point_in_equilateral_triangle` check for all points. If any point is invalid, it returns a large positive penalty value.
+    *   If all points are valid, it calls `get_min_triangle_area` and returns the negative of the result (to maximize minimum area).
+4.  **Optimization Setup**: Utilize `scipy.optimize.differential_evolution`.
+    *   Set `bounds` for each coordinate: `[(0.0, 1.0)] * n + [(0.0, np.sqrt(3)/2)] * n`.
+    *   Pass `n` as an argument using `args=(n,)`.
+    *   Ensure `seed` is set for `differential_evolution` (e.g., `seed=42`) for reproducibility.
+    *   Consider increasing `maxiter` (e.g., 1000-2000) and `popsize` (e.g., 15-20) for better convergence.
+    *   Using `workers=-1` can leverage all available CPU cores for faster computation.
+
+VALIDATION FRAMEWORK:
+1.  **Triangle Area Calculation**: For three points `p1=(x1, y1)`, `p2=(x2, y2)`, `p3=(x3, y3)`, the area can be calculated using the determinant formula: `0.5 * abs(x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2))`.
+2.  **Point-in-Triangle Check**: A point `(x, y)` is inside or on the boundary of the unit equilateral triangle (vertices `V1=(0,0)`, `V2=(1,0)`, `V3=(0.5, np.sqrt(3)/2)`) if it satisfies the following system of inequalities:
+    *   `y >= -1e-9` (above or on the x-axis)
+    *   `y <= np.sqrt(3) * x + 1e-9` (below or on the line V1-V3)
+    *   `y <= -np.sqrt(3) * (x - 1) + 1e-9` (below or on the line V2-V3)
+    Small epsilon values are crucial for robust floating-point comparisons. For consistency with the external evaluation framework, the `EPSILON` used in `is_point_in_equilateral_triangle` should be set to `1e-6` (the same tolerance used by the external validator) or a slightly smaller value (e.g., `1e-7`) to ensure strict adherence.
+3.  **Minimum Area Calculation**: After obtaining a set of `n` points, iterate through all `math.comb(n, 3)` possible combinations of three points (using `itertools.combinations`) and apply the `calculate_triangle_area` function to each triplet, keeping track of the absolute minimum area found.
+4.  **Normalization**: The `min_area_normalized` metric is obtained by dividing the `get_min_triangle_area` result by the area of the unit equilateral triangle (`np.sqrt(3)/4`).
+
+CONSTRAINTS AND CRITICAL REQUIREMENTS:
+1.  **Number of Points**: The constructor function must generate exactly `n=11` points.
+2.  **Domain Adherence**: All generated points must lie strictly within or on the boundary of the specified unit equilateral triangle (vertices: (0,0), (1,0), (0.5, `np.sqrt(3)/2`)), consistent with an external validation tolerance of `1e-6`. The internal `is_point_in_equilateral_triangle` function should use an `EPSILON` value that ensures this adherence.
+3.  **Primary Objective**: The core goal is to maximize the minimum area of any triangle formed by three points from the generated set.
+4.  **Reproducibility**: Any stochastic components within the optimization process (e.g., initial population generation, mutation in metaheuristics) must use a fixed random seed (e.g., `np.random.seed(42)`) and the `seed` parameter for `differential_evolution` to ensure deterministic and verifiable results.
+5.  **Output Format**: The function must return a `np.ndarray` of shape `(11, 2)` containing the x,y coordinates of the optimal point arrangement.
+
+# PROMPT-BLOCK-END

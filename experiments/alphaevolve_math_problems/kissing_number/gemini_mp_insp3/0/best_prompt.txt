@@ -1,0 +1,51 @@
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+SETTING:
+You are an expert in discrete geometry, combinatorial optimization, and efficient algorithm design for high-dimensional integer lattices. Your goal is to construct a large set of 11-dimensional integer points satisfying a specific geometric condition.
+
+PROBLEM CONTEXT:
+The task is to find a set $S = \{p_1, \ldots, p_k\}$ of $k$ points in $\mathbb{Z}^{11}$ such that all points have integral coordinates. The primary objective is to maximize $k = |S|$.
+The key geometric constraint is: the maximum Euclidean norm of any point in $S$ must be strictly smaller than the minimum Euclidean pairwise distance between any two distinct points in $S$.
+Formally, let $N_{max} = \max_{p \in S} \|p\|_2$ and $D_{min} = \min_{p_i, p_j \in S, i \neq j} \|p_i - p_j\|_2$. We require $N_{max} < D_{min}$.
+A benchmark solution achieved 593 points. Your goal is to exceed this.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Combinatorial Construction**: Focus on generating points with specific coordinate patterns (e.g., coordinates limited to $\{0, \pm 1, \pm 2, \ldots\}$). Often, points consisting of permutations and sign changes of a small number of non-zero integer coordinates yield highly symmetric and dense sets.
+2.  **Shell Enumeration**: Investigate "shells" of points, where all points have the same squared Euclidean norm (e.g., points with $m$ non-zero $\pm 1$ coordinates and $11-m$ zero coordinates). This approach simplifies $N_{max}$ calculation.
+3.  **Greedy Search / Iterative Improvement**: Start with a small valid set and iteratively try to add more points from a candidate pool, ensuring the $N_{max} < D_{min}$ condition remains satisfied. This might involve adjusting the set if adding a point violates the condition.
+4.  **Pruning**: Use the $N_{max} < D_{min}$ condition to prune candidate points or entire sets. If a candidate set already violates the condition, discard it.
+5.  **Efficiency**: Given the high dimensionality, avoid explicit loops over all coordinates. Leverage `numpy` for vectorized operations.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Euclidean Norm and Distance**: The standard definitions for $\|p\|_2 = \sqrt{\sum_{i=1}^{11} p_i^2}$ and $\|p_i - p_j\|_2 = \sqrt{\sum_{k=1}^{11} (p_{ik} - p_{jk})^2}$ apply.
+2.  **Triangle Inequality**: For any two distinct points $p_i, p_j \in S$, we have $\|p_i - p_j\|_2 \le \|p_i\|_2 + \|p_j\|_2$. Combining this with the core constraint $N_{max} < D_{min}$, we derive $N_{max} < D_{min} \le 2 N_{max}$. This implies a tight relationship between the maximum point norm and minimum pairwise distance.
+3.  **Disjoint Balls Analogy**: The condition $N_{max} < D_{min}$ implies that if we consider open balls of radius $N_{max}/2$ centered at each point $p \in S$, these balls must be disjoint. Furthermore, all points $p \in S$ are contained within an open ball of radius $N_{max}$ centered at the origin. This framing connects the problem to sphere packing within a larger bounding sphere.
+4.  **Integer Lattices**: The constraint to integer coordinates means that $N_{max}^2$ and $D_{min}^2$ will always be integers (sums of squares of integers). This significantly limits the possible values for norms and distances.
+5.  **Symmetry**: Optimal solutions for similar problems often exhibit high symmetry. Consider generating points by permuting coordinates and applying sign changes. For instance, a fruitful approach might be to consider points with a fixed number of non-zero $\pm 1$ coordinates, and the rest zeros. For example, points with $m$ coordinates equal to $\pm 1$ and $11-m$ coordinates equal to $0$.
+
+**Recommended implementation patterns**:
+- Use `numpy` arrays for representing points and for efficient vector operations.
+- Implement helper functions to calculate $N_{max}$ and $D_{min}$ for a given set of points efficiently.
+- For generating candidate points with combinatorial patterns, `itertools.combinations` can be used to select coordinate positions, and `itertools.product` to assign signs.
+- Consider using `scipy.spatial.distance.pdist` or `scipy.spatial.distance.cdist` for efficient pairwise distance calculations. For extremely large sets, a `KDTree` (from `scipy.spatial`) could speed up nearest neighbor searches to find $D_{min}$.
+
+# PROMPT-BLOCK-END

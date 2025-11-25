@@ -1,0 +1,78 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+The current state-of-the-art lower bound for C₂ is approximately 0.8962799441554086, achieved by the triangle function (e.g., f(x) = max(0, 1 - |x|/L) for some width L). This function is non-negative, symmetric, and compactly supported.
+Key properties:
+- The autoconvolution `g = f ★ f` is always an even function if `f` is real. If `f` is also symmetric and unimodal, `g` will be symmetric and unimodal, peaking at `x=0`.
+- The Fourier transform property `F(f ★ f) = F(f) * F(f)` is fundamental for efficient convolution computation.
+- The infinite domain `ℝ` for `f` is typically handled by assuming `f` has compact support or decays rapidly (e.g., a Gaussian function). This allows for numerical discretization on a finite interval `[-L, L]`. The choice of `L` and the number of discretization points `N` significantly impact accuracy and the achievable C₂ value.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+1.  **Function Parameterization**: Instead of optimizing a discrete array of `f_values`, represent `f(x)` as a continuous, parameterized function `f(x; θ)`. This allows for smoother functions and potentially better adherence to the continuous domain `ℝ`.
+    *   **Examples**:
+        *   **Sum of Basis Functions**: Represent `f(x)` as a sum of simple, non-negative basis functions (e.g., Gaussians, B-splines, triangle functions), where `θ` are the amplitudes, positions, and widths of these components. This provides interpretability and can enforce non-negativity by design.
+        *   **Small Neural Network (MLP)**: Use a small `jax.nn.Module` (e.g., an MLP with ReLU activations) to output `f(x)`. Ensure the final layer or activation enforces non-negativity (e.g., `jax.nn.relu` on the output, or `jnp.exp(output)`).
+2.  **Domain Optimization**: The width `L` of the compact support (or effective support for decaying functions) can be a crucial parameter. Consider optimizing `L` as part of `θ` or treating it as a hyperparameter to sweep over.
+3.  **Initial Guess**: Initialize the parameters `θ` such that `f(x; θ)` approximates a known good function, such as a triangle function or a Gaussian. This can significantly speed up convergence and help avoid poor local optima.
+4.  **Discretization Resolution**: Increase the number of discretization points (`num_intervals`) to improve the accuracy of convolution and norm calculations, especially when aiming for higher C₂ values. A value of `N=50` is likely too coarse for groundbreaking results.
+5.  **Advanced Optimizers**: While Adam is robust, explore other `optax` optimizers, or consider quasi-Newton methods (e.g., L-BFGS, if available in JAX/SciPy compatible form) for potentially faster convergence in continuous optimization problems.
+6.  **Regularization**: Add regularization terms to the objective function to promote desired properties, such as smoothness or compact support for `f(x)`.
+
+**Recommended implementation patterns**:
+1.  **JAX for Core Computations**: Leverage `jax.jit` for compiling functions and `jax.vmap` for efficient batch evaluation of `f(x; θ)` at multiple grid points.
+2.  **FFT for Convolution**: Continue using `jnp.fft.fft` for highly efficient convolution computation. Ensure proper zero-padding for non-periodic convolutions.
+3.  **Robust Norm Calculations**:
+    *   **Discretization**: Define a fine grid `x_grid` over `[-L, L]` (or a wider interval) and evaluate `f(x_grid; θ)` to obtain discrete samples. The number of points `N` should be high enough for accuracy.
+    *   **Integration**: For `||g||₁` and `||g||₂²`, use numerical integration techniques on the discrete samples of `g = f ★ f`. The generated code's rigorous L2-norm squared calculation for piecewise linear functions is a strong approach for the `f ★ f` samples. Ensure consistency between the interpretation of `f ★ f` samples (e.g., as piecewise linear) and the integration method chosen for all norms.
+    *   **Infinity Norm**: `jnp.max(jnp.abs(convolution_samples))` remains the standard approach.
+4.  **Enforcing Non-negativity**: Design the parameterized function `f(x; θ)` to inherently produce non-negative values (e.g., `jnp.exp(mlp_output)` or `jnp.square(mlp_output)` if the MLP output can be any real number, or `jnp.maximum(0, mlp_output)`).
+5.  **Exploiting Symmetry**: If `f(x)` is assumed to be symmetric (which is often optimal for C₂), reduce the number of parameters by defining `f(x; θ)` as `f(|x|; θ')`. This can simplify optimization.
+6.  **JAX-Compatible Control Flow**: When using `jax.jit`, it is crucial to avoid Python `if/else` statements or other dynamic control flow that depends on JAX array values (traced values). Such constructs will result in a `jax.errors.TracerBoolConversionError`. Instead, use JAX's functional equivalents like `jnp.where` or `jnp.select` for conditional logic. For instance, to handle edge cases like `integral_f < epsilon` or `norm_inf_g < epsilon` which should return `jnp.inf` as a penalty, refactor the code to use `jnp.where(condition, value_if_true, value_if_false)` to maintain jittability.
+
+# PROMPT-BLOCK-END

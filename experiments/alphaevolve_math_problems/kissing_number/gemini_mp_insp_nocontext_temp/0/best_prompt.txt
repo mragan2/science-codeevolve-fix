@@ -1,0 +1,54 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+-   **Constructive Approach**: Instead of searching a vast space, aim to directly construct a large set of points that inherently satisfy the geometric constraint. This often involves identifying a specific algebraic or combinatorial structure.
+-   **Fixed L2 Norm Strategy**: A highly effective approach for this type of problem is to search for a set of points $S$ where *all* points $p \in S$ have the same L2 norm, say $\|p\|_2 = R_{fixed}$. In this scenario, the primary constraint $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$ simplifies significantly to $R_{fixed} \le \min_{i \neq j} \|p_i - p_j\|_2$.
+    -   Further, for points with constant norm $R_{fixed}$, the squared Euclidean distance between two distinct points $p_i, p_j$ is $\|p_i - p_j\|_2^2 = \|p_i\|_2^2 + \|p_j\|_2^2 - 2 p_i \cdot p_j = 2R_{fixed}^2 - 2 p_i \cdot p_j$.
+    -   Thus, the condition $R_{fixed}^2 \le \|p_i - p_j\|_2^2$ becomes $R_{fixed}^2 \le 2R_{fixed}^2 - 2 p_i \cdot p_j$, which simplifies to $2 p_i \cdot p_j \le R_{fixed}^2$, or $p_i \cdot p_j \le R_{fixed}^2 / 2$.
+    -   This means the task reduces to finding a large set of integer vectors $S$ such that all vectors have the same squared L2 norm $M = R_{fixed}^2$, and for any two distinct vectors $p_i, p_j \in S$, their dot product $p_i \cdot p_j \le M/2$.
+-   **Combinatorial Construction**: Focus on generating points with specific, highly structured integer coordinate patterns. For example, consider points where a fixed number of coordinates are $\pm 1$ and the rest are zero. This often leads to highly symmetric and dense configurations that satisfy the dot product constraint.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+-   **Spherical Codes**: The problem is closely related to finding large "spherical codes" of integer points. A spherical code is a set of points on a sphere such that the minimum distance between any two points is maximized (or, in our case, satisfies a specific lower bound relative to the sphere's radius).
+-   **Lattice Subsets**: The constraint $p_i \in \mathbb{Z}^{11}$ means we are working within an integer lattice. Insights from known dense lattice packings (e.g., $A_n, D_n, E_n$ lattices) can inspire constructions, even if the problem is not directly about these specific lattices.
+-   **Constant Weight Codes Analogue**: In coding theory, constant weight codes are sets of binary vectors where each codeword has the same number of '1's. An analogous idea here is to consider integer vectors with a fixed number of non-zero coordinates, where those non-zero coordinates take values like $\pm 1$ or $\pm 2$. This often leads to sets with desirable dot product properties.
+-   **Orthogonality and Angle**: The dot product constraint $p_i \cdot p_j \le M/2$ implies a minimum angular separation between vectors. If $p_i \cdot p_j = 0$, the vectors are orthogonal. If $p_i \cdot p_j < 0$, they are obtusely angled.
+
+**Recommended implementation patterns**:
+-   **Efficient Combinatorial Generation**: Utilize Python's `itertools` module (e.g., `combinations`, `product`) to efficiently generate candidate points based on combinatorial patterns. For instance, selecting positions for non-zero coordinates and then assigning signs to them.
+-   **Numpy for Vectorized Operations**: Leverage `numpy` for high-performance L2 norm calculations, dot products, and array manipulations. This is crucial for handling 11-dimensional vectors and potentially large sets of points.
+-   **Verification Function**: Implement a clear, separate function to rigorously check if a generated set of points satisfies the core geometric constraint. This function should compute $\max_{i} \|p_i\|_2$ and $\min_{i \neq j} \|p_i - p_j\|_2$ and compare them.
+-   **Pre-computation and Filtering (if applicable)**: For more complex strategies, it might be beneficial to pre-compute a pool of candidate points (e.g., all integer points up to a certain L2 norm) and then apply filtering rules or optimization algorithms to select the final set.
+
+# PROMPT-BLOCK-END

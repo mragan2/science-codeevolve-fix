@@ -1,0 +1,74 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Evolutionary Algorithms (EAs)**: Given the "AlphaEvolve" benchmark, this is a highly recommended and often state-of-the-art approach for exploring the vast and complex search space of integer points in high dimensions. EAs are particularly well-suited for problems with large, non-convex search spaces where greedy methods can get stuck in local optima.
+    *   **Population**: Maintain a collection of candidate sets of points, each representing a potential solution.
+    *   **Fitness Function**: Design a fitness function that rewards larger sets satisfying the geometric constraint. A common approach is to use a penalty-based fitness: `fitness = |S| - C * max(0, R_max_squared - D_min_squared)` where `C` is a large penalty constant, and we use squared norms/distances for efficiency. The goal is to maximize this fitness.
+    *   **Genetic Operators**:
+        *   **Mutation**: Introduce small, random changes to existing points (e.g., randomly perturb one coordinate by $\pm 1$), add new points (randomly sampled from a relevant region or a lattice), or remove points. Consider mutations that leverage the `Candidate Point Generation` strategy to introduce new, valid points.
+        *   **Crossover**: Combine points from two parent sets to create offspring, aiming to inherit good properties from both.
+    *   **Selection**: Use standard selection methods (e.g., tournament selection, roulette wheel) to favor fitter individuals for reproduction.
+*   **Greedy Construction with Local Search**:
+    *   Start with a small, valid set of points (e.g., a single non-zero point, or a few simple, symmetric points). **Crucially, the origin (0, ..., 0) must not be included in the set S.**
+    *   Iteratively try to add new integer points. For each candidate point, efficiently check if adding it maintains the geometric constraint.
+    *   **Candidate Prioritization**: When selecting candidate points for greedy addition, consider different heuristics:
+        *   **Ascending Norm**: Prioritize points with smaller L2 norms. This aims to build a dense packing near the origin.
+        *   **Descending Norm**: Prioritize points with larger L2 norms. This can help establish a larger minimum distance ($D_{min}$) early on, potentially allowing more points overall. The generated code used this strategy.
+        *   **Random**: Randomly select from the candidate pool.
+    *   **Limitations**: Pure greedy construction often gets stuck in local optima, which might explain suboptimal `num_points` results. It is often more effective when combined with other metaheuristics like local search or as a component within an Evolutionary Algorithm (e.g., for initial population generation or as a mutation operator).
+    *   After adding points, perform local optimization: try perturbing existing points slightly (e.g., changing one coordinate by $\pm 1$) to see if it allows more points to be added or improves the overall configuration's fitness.
+*   **Simulated Annealing**: A robust metaheuristic for exploring complex search spaces. Define a "temperature" schedule to balance exploration (accepting worse solutions) and exploitation (converging to good solutions). This can be used to refine a set of points or to search for new points.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **The Geometric Constraint**: The condition $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$ is crucial. Let $R_{max}$ be the maximum L2 norm from the origin, and $D_{min}$ be the minimum pairwise L2 distance. The condition $R_{max} \le D_{min}$ means that if we normalize the points such that the minimum pairwise distance is $D$, then all points must lie within a sphere of radius $D$ centered at the origin. This is a specific type of finite sphere packing problem where the points are constrained to an integer lattice. **It is critical that the origin (0, ..., 0) is NOT included in the set S, as its inclusion would lead to a trivial or highly constrained solution that is typically not sought in this variant of the kissing number problem.**
+*   **Integer Lattice Points**: All points $p_i$ must have integer coordinates ($p_i \in \mathbb{Z}^{11}$). This significantly restricts the search space compared to real-valued points and implies that the squared L2 norms and squared distances will be integers.
+*   **Symmetry**: Optimal configurations in high dimensions often exhibit high degrees of symmetry. Consider generating points that are symmetric or belong to known highly symmetric lattices.
+    *   **Root Lattices**: The $D_n$ lattice is particularly relevant for integer points. Points in $D_{11}$ are $(x_1, \dots, x_{11}) \in \mathbb{Z}^{11}$ such that $\sum x_i$ is even. The minimum non-zero squared Euclidean norm in $D_{11}$ is 2. Points from $D_{11}$ or related lattices could form good starting candidates or mutation pools.
+    *   **Candidate Point Generation**: A systematic way to generate candidate points is to iterate through all integer points within a certain maximum squared L2 norm. Since all points $p_i$ must satisfy $\|p_i\|_2 \le R_{max}$, their individual coordinates $x_j$ must satisfy $|x_j| \le R_{max}$. This defines a hypercube bounding the search space for individual coordinates. You can iterate through all integer coordinates $(x_1, \dots, x_{11})$ such that $|x_j| \le C$ for some constant $C$, calculate their squared L2 norm, and filter those that are within a desired maximum squared norm. **Ensure that the origin (0, ..., 0) is explicitly excluded from this candidate pool.**
+*   **Candidate Point Generation**: A systematic and robust way to generate candidate integer points is to iterate through all points within a hypercube defined by $|x_j| \le C$ for some constant $C$, and then filter them by their squared L2 norm.
+    *   **Hypercube Iteration**: Iterate through all integer coordinates $(x_1, \dots, x_{11})$ where each $|x_j| \le C$. For example, using `itertools.product` for `range(-C, C+1)` for each dimension.
+    *   **Filtering by Norm**: For each generated point, calculate its squared L2 norm. Only keep points where `sq_norm <= max_allowed_sq_norm`.
+    *   **Exclusion**: **Ensure that the origin (0, ..., 0) is explicitly excluded from this candidate pool.**
+    *   **Choosing C and max_allowed_sq_norm**: For 11 dimensions and aiming for hundreds of points, `C` will likely need to be larger than 3 or 4. A value of `C=5` or `C=6` might be a more appropriate starting point for a comprehensive search, leading to `max_allowed_sq_norm` values in the range of 10-50 or even higher. The generated code's `max_r_sq_cand = 11` is too restrictive. This general hypercube iteration is crucial for exploring a sufficiently large search space and is significantly more robust than manually enumerating specific coordinate patterns or partitions of norms.
+
+**Recommended implementation patterns**:
+*   **Leverage NumPy for Vectorized Operations**: Utilize NumPy for efficient vector and matrix operations (e.g., calculating L2 norms, pairwise L2 distances). Avoid explicit Python loops for these calculations where NumPy vectorized operations are possible, as this dramatically improves performance.
+*   **JIT Compilation with Numba**: For performance-critical sections of code, especially loops that cannot be fully vectorized (e.g., iterating through candidate points in a greedy search, or parts of the fitness evaluation), use `numba.jit` to compile Python code to fast machine code.
+*   **Spatial Data Structures (KDTree)**: To efficiently check the minimum pairwise distance constraint for a large number of points, use `scipy.spatial.KDTree`. This allows for fast nearest neighbor queries (e.g., `query_ball_point` or `query_ball_tree`), significantly reducing the complexity of distance checks from $O(k^2)$ to $O(k \log k)$ or better when adding new points or evaluating a set. **Crucially, avoid rebuilding the entire KDTree in every iteration of a greedy construction or local search loop, as this is computationally very expensive. Instead, build the KDTree once on the current set of points and then use its query methods to evaluate new candidates or perturbations. If points are frequently added/removed, consider alternative spatial data structures or strategies that minimize rebuilds, or batch updates.**
+*   **Work with Squared Distances/Norms**: To avoid expensive square root operations, perform all comparisons and calculations using squared L2 norms and squared L2 distances. For a single point `p`, its squared L2 norm is `np.sum(p**2)`. For a collection of points `P` (a 2D NumPy array where each row is a point), the squared L2 norms of all points can be efficiently computed as `np.sum(P**2, axis=1)`. Similarly, for two points `p1, p2`, their squared L2 distance is `np.sum((p1-p2)**2)`. The condition $A \le B$ is equivalent to $A^2 \le B^2$ for non-negative $A, B$.
+*   **Modular Design**: Structure the code into well-defined functions for clarity, reusability, and easier debugging: e.g., `check_constraint(points)`, `calculate_fitness(points)`, `generate_candidate_point()`, `mutate_set(points)`.
+*   **Fixed Random Seed**: Ensure full reproducibility of the solution by explicitly setting `np.random.seed(42)` (or any other fixed seed) at the beginning of any stochastic process or algorithm.
+*   **Iterative Refinement**: Start with a small, valid set and iteratively try to grow it or improve its configuration using the optimization strategies.
+
+# PROMPT-BLOCK-END

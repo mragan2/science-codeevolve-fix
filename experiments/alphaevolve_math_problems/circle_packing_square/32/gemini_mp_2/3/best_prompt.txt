@@ -1,0 +1,91 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+*   **Evolutionary Algorithms (EAs)**: Given the problem's complexity (NP-hard, many local optima) and the availability of `deap`, EAs are highly recommended.
+    *   Represent each solution (individual) as a flat array `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]`.
+    *   The fitness function should incorporate both the `sum_radii` objective and robust penalties for constraint violations (overlap, out-of-bounds).
+*   **Vectorization with NumPy**: Leverage NumPy for efficient calculations of distances, constraint checks, and objective function evaluation. Avoid explicit Python loops where possible for performance.
+*   **Numba for Performance-Critical Sections**: If specific parts of the fitness evaluation (e.g., pairwise distance calculations or constraint checks) become bottlenecks, consider using `numba.jit` to compile them for speed.
+*   **Careful Initialization**: Random initialization of circle parameters within the unit square is a starting point, but consider more intelligent strategies (e.g., starting with small radii, or placing circles in a grid-like fashion) to facilitate faster convergence.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Global Optimization with Metaheuristics (Primary Strategy)**:
+    *   **Genetic Algorithms (GAs)**: Implement a GA using the `deap` library.
+        *   **Individual Representation**: A 1D array of `32 * 3 = 96` floats `[x1, y1, r1, ..., x32, y32, r32]`.
+        *   **Initialization**: Randomly generate `x, y` within `[0,1]` and `r` within a feasible range (e.g., `[0.001, 0.1]`) to ensure initial potential for growth. Ensure `deap`'s `creator.Individual` is configured for a list of floats.
+        *   **Fitness Function**: This is critical. Combine the `sum_radii` (to maximize) with a robust penalty system for constraint violations:
+            *   `Fitness = sum_radii - C_overlap * sum(max(0, ri + rj - distance_ij)) - C_boundary * sum(max(0, ri - xi), max(0, xi - (1-ri)), ...)`. Use large penalty constants `C_overlap`, `C_boundary` (e.g., 1000-10000) to strongly penalize infeasible solutions.
+            *   Ensure `r_i` values are clamped to be non-negative (or a small positive minimum) during or after mutation to prevent invalid radii.
+        *   **Selection**: Use `deap.tools.selTournament` or similar for selecting parents.
+        *   **Crossover**: Use `deap.tools.cxBlend` or a similar operator suitable for real-valued genomes.
+        *   **Mutation**: Use `deap.tools.mutGaussian` for exploration, potentially with adaptive standard deviation.
+        *   **Evolutionary Loop**: Implement generations, population updates, and elitism to preserve the best solutions.
+*   **Hybrid Approaches**: After an initial global search with an EA, consider refining the best solutions using a local optimization method (e.g., `scipy.optimize.minimize` with a constrained solver like SLSQP or COBYLA). This can help reach higher precision.
+*   **Annealing/Gradual Growth**: An alternative or complementary strategy is to start with a configuration of small, non-overlapping circles and gradually increase their radii while continuously optimizing their positions to maintain feasibility and maximize the sum of radii. This can help avoid getting stuck in poor local optima.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **NP-Hardness**: Circle packing is a known NP-hard problem. This implies that finding the absolute global optimum for N=32 is computationally intractable in general, and heuristic/metaheuristic approaches are necessary to find high-quality solutions.
+*   **Optimal Configurations**: Optimal packings often exhibit complex, non-obvious symmetries. For N=32, the configuration is likely intricate and not easily derivable from simple geometric rules.
+*   **Contact Graph**: The arrangement of circles can be conceptualized as a contact graph, where circles are nodes and an edge exists if two circles touch. Maximizing radii generally leads to configurations where many circles are in contact with each other or the boundaries.
+*   **Bounding Box Constraints**: The constraints `ri ≤ xi ≤ 1-ri` and `ri ≤ yi ≤ 1-ri` define the valid region for each circle's center. This means a circle's center cannot be arbitrarily close to the boundary if its radius is significant.
+*   **Distance Metric**: The Euclidean distance `√[(xi-xj)² + (yi-yj)²]` is fundamental for the non-overlap constraint. Squaring this distance `(xi-xj)² + (yi-yj)²` and comparing it to `(ri+rj)²` can avoid square root computations and improve numerical stability during optimization, as long as `ri+rj` is guaranteed positive.
+
+VALIDATION FRAMEWORK:
+The `circle_packing32` function should return a `np.ndarray` of shape `(32, 3)` where each row is `(x, y, r)`. The validation process will perform the following checks:
+
+1.  **Output Format**:
+    *   Verify the output is a NumPy array of shape `(32, 3)`.
+    *   Ensure all `x, y, r` values are floating-point numbers.
+2.  **Radius Validity**:
+    *   All radii `r_i` must be strictly positive (`r_i > 0`). Solutions with zero or negative radii are invalid.
+3.  **Containment Constraint**:
+    *   For each circle `i` with `(xi, yi, ri)`:
+        *   `xi >= ri - 1e-9` (center x must be at least radius from left edge)
+        *   `xi <= 1 - ri + 1e-9` (center x must be at most radius from right edge)
+        *   `yi >= ri - 1e-9` (center y must be at least radius from bottom edge)
+        *   `yi <= 1 - ri + 1e-9` (center y must be at most radius from top edge)
+    *   A small tolerance (`1e-9`) is used for floating-point comparisons.
+4.  **Non-Overlap Constraint**:
+    *   For every unique pair of circles `(i, j)` where `i ≠ j`:
+        *   Calculate the squared distance `d2_ij = (xi-xj)² + (yi-yj)²`.
+        *   Check that `d2_ij >= (ri + rj)² - 1e-9`.
+    *   Using squared distances avoids `sqrt` and improves numerical stability. A small tolerance (`1e-9`) is applied.
+5.  **Objective Value**:
+    *   Calculate `sum_radii = Σ ri`.
+    *   If *any* of the above constraints (2, 3, 4) are violated beyond their respective tolerances, the `sum_radii` for that configuration will be considered `0.0` for scoring purposes. Only fully valid configurations contribute to the benchmark.
+
+# PROMPT-BLOCK-END
+    

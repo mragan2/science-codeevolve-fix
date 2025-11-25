@@ -1,0 +1,84 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem is a challenging high-dimensional combinatorial optimization task. Brute-force search is not feasible. Consider the following approaches:
+
+1.  **Evolutionary Algorithms (Genetic Algorithms / Evolutionary Strategies)**: Given the success of "AlphaEvolve" in similar problems, these are highly recommended.
+    *   **Representation**: A "chromosome" could represent a candidate set of points $S$.
+    *   **Fitness Function**: Design a fitness function that prioritizes maximizing `num_points` while strictly adhering to the geometric constraint. Penalize constraint violations heavily. For example, `fitness = num_points` if valid, else `0` or `num_points * (satisfaction_ratio)` where `satisfaction_ratio` is `min_pairwise_dist_sq / max_norm_sq` (if `max_norm_sq > min_pairwise_dist_sq`, this ratio is less than 1, effectively reducing fitness).
+    *   **Mutation Operators**:
+        *   **Point Perturbation**: Randomly select a point and slightly change one or more of its integer coordinates (e.g., `p_i -> p_i + delta` where `delta` is a small integer vector).
+        *   **Add Point**: Generate a new random integer point within a reasonable coordinate range and attempt to add it to the set.
+        *   **Remove Point**: Randomly remove a point from the set.
+        *   **Symmetry Operations**: Apply permutations of coordinates or sign changes to existing points to generate new candidates or diversify the population.
+    *   **Crossover Operators**: Combine points from two parent sets to create offspring. This could involve taking a subset of points from each parent.
+    *   **Selection**: Use techniques like tournament selection, elitism, or steady-state selection to propagate fitter solutions.
+2.  **Greedy Construction with Local Search**:
+    *   **Initialization**: Start with a small, valid set of points (e.g., two antipodal points like `(1,1,...,1)` and `(-1,-1,...,-1)`).
+    *   **Iterative Addition**: In each step, search for a new integer point $p_{new} \in \mathbb{Z}^{11}$ that, when added to the current set $S$, still satisfies the geometric constraint. Prioritize points that allow the set to remain valid while maximizing cardinality.
+    *   **Candidate Generation**: Generate candidate $p_{new}$ points by:
+        *   Exploring integer points within a certain L2-norm bound from the origin.
+        *   Exploring integer points near existing points in $S$.
+    *   **Local Refinement**: After adding points, perform local search: try slightly perturbing coordinates of existing points to improve the overall constraint ratio or allow for more points to be added.
+3.  **Heuristic Search with Pruning**:
+    *   Limit the search space for individual integer coordinates (e.g., restrict coordinates to a range like `[-C, C]` for a small integer `C`, typically 0, 1, 2, or 3, as larger coordinates lead to larger norms).
+    *   Focus on points with specific properties, such as a small number of non-zero coordinates, or coordinates with specific parities, which are common in dense lattices.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Constraint Interpretation**: The core condition $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$ implies:
+    *   All points $p_i$ must lie within a hypersphere of radius $R = \max_{i} \|p_i\|_2$ centered at the origin.
+    *   No two points $p_i, p_j$ can be closer than $R$. This means that open spheres of radius $R/2$ centered at each $p_i$ are disjoint.
+    *   Effectively, this is a sphere packing problem where the packing spheres have radius $R/2$, and all their centers $p_i$ must be contained within a larger sphere of radius $R$ centered at the origin.
+2.  **Integer Lattice Context**: Points are restricted to $\mathbb{Z}^{11}$. This suggests exploring well-known dense lattices or specific sublattices. For example, points with coordinates from a small set of integers (e.g., $\{-2, -1, 0, 1, 2\}$) are often good candidates in early stages of the search.
+3.  **Origin Exclusion**: The origin $(0, \dots, 0)$ cannot be part of a set with $k > 1$ points. If $p_1 = (0, \dots, 0)$, then $\max \|p_i\|_2 = R = \max_{i \ne 1} \|p_i\|_2$. However, $\min \|p_i - p_j\|_2$ would be at most $\|p_2 - p_1\|_2 = \|p_2\|_2$. For the constraint to hold, $R \le \min(\|p_i\|_2)$, which implies all non-zero points must have a norm greater than or equal to $R$. This often leads to trivial solutions or makes it impossible to add more points. Therefore, for $k>1$, the origin should generally be excluded.
+4.  **Symmetry Exploitation**: High-dimensional sphere packings often exhibit high degrees of symmetry. Consider generating points by applying permutations of coordinates and sign changes to a base set of points. This can significantly expand the search space from a few seeds and reduce redundancy in exploration.
+5.  **Focus on Squared Norms**: All comparisons ($R \le D$) can and *should* be done using squared L2 norms to avoid computationally expensive square root operations: $\max_i \|p_i\|_2^2 \le \min_{i \neq j} \|p_i - p_j\|_2^2$. This is a critical optimization for performance.
+
+**Recommended implementation patterns**:
+1.  **Vectorized Operations with NumPy**: Leverage NumPy for all array operations, especially for calculating L2 norms and pairwise distances. This is crucial for performance in high dimensions.
+    *   `norms_sq = np.sum(points**2, axis=1)`
+    *   `max_norm_sq = np.max(norms_sq)`
+    *   `diffs = points[:, np.newaxis, :] - points[np.newaxis, :, :]` (to get all pairwise differences)
+    *   `pairwise_dist_sq = np.sum(diffs**2, axis=2)`
+    *   Extract `min_pairwise_dist_sq` from the upper triangle of `pairwise_dist_sq` (excluding diagonal elements, which are zero). A common way is `np.min(pairwise_dist_sq[np.triu_indices(k, k=1)])`.
+2.  **Numba for JIT Compilation**: For any remaining performance-critical loops or functions that cannot be fully vectorized by NumPy (e.g., specific parts of a genetic algorithm's mutation/crossover operators or fitness evaluation), use `numba.jit` to compile them for significant speedups.
+3.  **Spatial Indexing (Scipy KDTree)**: For efficient nearest-neighbor queries to find the minimum pairwise distance, especially as the number of points `k` grows, `scipy.spatial.KDTree` can be very effective. This can reduce complexity for distance calculations from $O(k^2)$ to $O(k \log k)$.
+4.  **Modular Design**: Structure your code with clear, testable functions:
+    *   `is_valid_set(points)`: Takes a `np.ndarray` of points and returns `True` if the geometric constraint is met, `False` otherwise.
+    *   `calculate_metrics(points)`: Returns `num_points`, `max_norm_sq`, `min_pairwise_dist_sq`.
+    *   Functions for GA operators (e.g., `mutate`, `crossover`, `select_parents`) or greedy search steps.
+5.  **Deterministic Randomness**: Ensure `np.random.seed(42)` is called at the beginning of your script to guarantee reproducibility for any stochastic algorithms.
+6.  **Data Structures**: Represent the set of points as a `numpy.ndarray` of shape `(k, 11)`, where `k` is the number of points. Ensure integer `dtype` (e.g., `np.int64`).
+
+# PROMPT-BLOCK-END

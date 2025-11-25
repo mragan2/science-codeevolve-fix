@@ -1,0 +1,89 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+
+1.  **Evolutionary Algorithms (Genetic Algorithms / AlphaEvolve-inspired)**:
+    *   Given the "AlphaEvolve" benchmark, an evolutionary approach is highly recommended. This involves maintaining a population of candidate sets of points, evolving them over generations through mutation and crossover operations.
+    *   **Representation**: A "chromosome" could be a subset of a larger pre-generated pool of candidate integer points (e.g., a bitmask indicating inclusion) or a list of point vectors.
+    *   **Fitness Function**: Maximize `num_points` while strictly enforcing the geometric constraint. Solutions violating the constraint should receive a heavily penalized fitness score.
+    *   **Mutation**: Introduce variation by adding a random valid point, removing a random point, or swapping a point with another from the candidate pool.
+    *   **Crossover**: Combine points from two "parent" sets to create "offspring" sets, typically followed by a pruning or repair step to ensure constraint satisfaction.
+    *   **Selection**: Prioritize sets with higher `num_points` for reproduction, using strategies like tournament selection or roulette wheel selection.
+
+2.  **Iterative Construction with Local Search**:
+    *   **Greedy Addition**: Start with an empty or small valid set. Iteratively add points from a pre-generated pool of candidates. At each step, choose the point that, when added, maximizes the resulting set size while maintaining the geometric constraint. Prioritize points that keep the maximum norm low or that are "far" from existing points.
+    *   **Local Optimization**: After constructing an initial set, try to improve it by performing local changes:
+        *   **Point Swaps**: Remove an existing point and try to add a new one from the candidate pool that improves the objective.
+        *   **Coordinate Perturbation**: Slightly modify the coordinates of existing points (e.g., $\pm 1$ in one dimension) if it leads to a valid configuration with higher `num_points`. Ensure coordinates remain integers.
+
+3.  **Graph-based Approach (Maximum Independent Set Heuristics)**:
+    *   **Candidate Pool Generation**: Generate a comprehensive pool of 11-dimensional integer points $C = \{p \in \mathbb{Z}^{11}\}$ whose squared L2 norm is within a reasonable range (e.g., up to $R^2_{max\_search}$, where $R^2_{max\_search}$ is an upper bound on the maximum squared norm observed in good solutions).
+    *   **Adjacency Graph**: Construct a graph $G=(V, E)$ where $V=C$. An edge $(u, v) \in E$ exists if the points $u$ and $v$ *cannot both be in the solution set* simultaneously. Specifically, an edge exists if $\|u-v\|_2^2 < \max(\|u\|_2^2, \|v\|_2^2)$.
+    *   **Maximum Independent Set**: The problem is then to find a maximum independent set in $G$. Since this is NP-hard, use efficient heuristics:
+        *   **Greedy MIS**: Iteratively select a node with the minimum degree, add it to the independent set, and remove its neighbors.
+        *   **Randomized MIS**: Combine greedy selection with random choices to explore different paths or use algorithms like WalkSAT for MIS.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+
+1.  **Working with Squared L2 Norms and Distances**: For integer coordinates, it is computationally more efficient and avoids floating-point precision issues to work with *squared* L2 norms and distances.
+    *   The constraint: $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$.
+    *   Squaring both sides (which is valid for non-negative values): $\max_{i} \|p_i\|_2^2 \le \min_{i \neq j} \|p_i - p_j\|_2^2$.
+    *   Let $R_{sq} = \max_{i} \|p_i\|_2^2$. Then, for any two distinct points $p_i, p_j$ in the set, we must have $\|p_i - p_j\|_2^2 \ge R_{sq}$.
+2.  **Candidate Point Generation**:
+    *   Points must have integer coordinates. The smallest non-zero squared L2 norm for an 11-dimensional integer point is 1 (e.g., $(\pm 1, 0, \dots, 0)$).
+    *   Systematically generate candidate points by enumerating integer points with small squared L2 norms. This involves finding integer solutions to $\sum_{k=1}^{11} x_k^2 = N$ for increasing values of $N$.
+        *   Example for $N=1$: $2 \times 11 = 22$ points (permutations of $(\pm 1, 0, \dots, 0)$).
+        *   Example for $N=2$: $2^2 \times \binom{11}{2} = 220$ points (permutations of $(\pm 1, \pm 1, 0, \dots, 0)$).
+        *   Example for $N=3$: $2^3 \times \binom{11}{3} = 1320$ points (permutations of $(\pm 1, \pm 1, \pm 1, 0, \dots, 0)$).
+    *   The origin $(0, \dots, 0)$ has a squared norm of 0. If it were part of the set, $R_{sq}$ would be 0, implying all pairwise distances must be $\ge 0$, which provides no separation. For a non-trivial solution, the origin is typically excluded, or $R_{sq}$ must be positive.
+3.  **Symmetry**: Optimal high-dimensional packings often exhibit high degrees of symmetry. Consider generating points that form orbits under permutations of coordinates and sign changes. This can help in exploring the search space more effectively and building more robust solutions.
+4.  **Lattice Structure**: The points are constrained to $\mathbb{Z}^{11}$. Solutions might benefit from understanding the structure of specific sub-lattices or highly symmetric configurations within $\mathbb{Z}^{11}$ that are known to have good packing properties (e.g., related to root lattices like $D_{11}$).
+
+**Recommended implementation patterns**:
+
+1.  **Modular Functions**:
+    *   `generate_candidate_points(max_sq_norm)`: A function to efficiently generate an array of 11-dimensional integer points whose squared L2 norm is less than or equal to `max_sq_norm`.
+    *   `check_set_constraint(points)`: Takes a `(k, 11)` numpy array, calculates $R_{sq} = \max_{i} \|p_i\|_2^2$ and $D_{min\_sq} = \min_{i \neq j} \|p_i - p_j\|_2^2$. Returns `True` if $R_{sq} \le D_{min\_sq}$, along with `k` (number of points) and $R_{sq}$.
+    *   Helper functions: `calculate_squared_norm(point)` and `calculate_squared_distance(p1, p2)`.
+2.  **Efficient Data Structures**:
+    *   **NumPy Arrays**: Use `numpy.ndarray` for storing points and performing vectorized operations (e.g., `np.sum((points[:, None, :] - points[None, :, :])**2, axis=2)` for computing all pairwise squared distances efficiently).
+    *   **Spatial Indexing**: For very large candidate pools (e.g., thousands of points), `scipy.spatial.KDTree` or `scipy.spatial.cKDTree` can significantly speed up nearest neighbor searches, which are critical for quickly checking distance constraints.
+3.  **Performance Optimization**:
+    *   **Numba**: Use `numba.jit` decorators for accelerating computationally intensive loops, especially for distance calculations and constraint checking functions.
+    *   **Pre-computation/Memoization**: Pre-compute squared norms for all candidate points. If the candidate pool is manageable, pre-compute a pairwise squared distance matrix (or its upper triangle) for quick lookups.
+4.  **Reproducibility**:
+    *   Ensure `numpy.random.seed(42)` (or another fixed integer) is called at the very beginning of any stochastic process (e.g., evolutionary algorithms, simulated annealing) to guarantee reproducible results.
+5.  **Iterative Refinement**: Implement algorithms that can start with a basic solution and iteratively improve it, rather than trying to find the optimal solution in one go. This is typical for heuristic search methods.
+
+# PROMPT-BLOCK-END

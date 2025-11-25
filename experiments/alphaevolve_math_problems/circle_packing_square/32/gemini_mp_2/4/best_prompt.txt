@@ -1,0 +1,82 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+-   **Representation**: Represent each circle as a tuple `(x, y, r)`. For optimization, it's often convenient to flatten the 32 circles into a single 1D numpy array `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]` of length 96.
+-   **Objective Function**: Define an objective function `f(params)` that, when minimized, maximizes the sum of radii. This can be achieved by returning `-np.sum(radii)`.
+-   **Constraints**:
+    -   **Bounds**: Define strict bounds for each variable: `0 <= x <= 1`, `0 <= y <= 1`, and `r_min <= r <= 0.5` (since a circle with radius > 0.5 cannot fit in a unit square). A small positive `r_min` (e.g., `1e-6`) is essential to prevent degenerate zero-radius solutions.
+    -   **Inequality Constraints**: Use `scipy.optimize.minimize`'s `constraints` argument, where each constraint function `g(params)` must return `g >= 0` for a satisfied constraint.
+        -   **Containment**: For each circle `i`:
+            -   `x_i - r_i >= 0`
+            -   `1 - x_i - r_i >= 0`
+            -   `y_i - r_i >= 0`
+            -   `1 - y_i - r_i >= 0`
+        -   **Non-overlap**: For all unique pairs `(i, j)` where `i < j`:
+            -   `dist_sq = (x_i - x_j)² + (y_i - y_j)²`
+            -   `min_dist_sq = (r_i + r_j)²`
+            -   `dist_sq - min_dist_sq >= 0` (using squared distances avoids `sqrt` for performance and gradient smoothness). There are `32 * 31 / 2 = 496` such constraints.
+-   **Optimization Framework**: `scipy.optimize.minimize` (e.g., with `method='SLSQP'` or `method='trust-constr'` for constrained problems) or `scipy.optimize.differential_evolution` for global optimization. For more customizable genetic algorithms, consider `deap`.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+-   **Initial Guess Generation**:
+    -   **Random Initialization**: Start with random `(x,y)` positions within `[0,1]` and very small, random `r` values. A common strategy is to start with all radii small, then expand them.
+    -   **Heuristic Growth**: Begin with small circles, then iteratively increase their radii while maintaining non-overlap and containment until a stable (but not necessarily optimal) configuration is reached. This can provide a good starting point for local optimization.
+    -   **Physics-based Simulation**: Model circles as particles with repulsive forces (e.g., using `pymunk` or a custom simulation). Let them 'settle' into a locally stable configuration. This can generate diverse initial guesses for multi-start optimization.
+-   **Local Optimization (e.g., `scipy.optimize.minimize` with `SLSQP`, `trust-constr`):**
+    -   These methods are efficient for refining solutions but are highly susceptible to getting stuck in local optima, especially in high-dimensional, non-convex spaces.
+-   **Global Optimization (to escape local optima and find better solutions):**
+    -   **Multi-start Local Optimization**: Run `scipy.optimize.minimize` from many diverse initial guesses (generated by random initialization or heuristics) and select the best result. This is often the most practical approach.
+    -   **Evolutionary Algorithms (`deap`, `scipy.optimize.differential_evolution`):** These are well-suited for high-dimensional, non-convex problems like circle packing. They explore the search space broadly by evolving a population of solutions. Prioritize `differential_evolution` if `deap` feels too complex initially.
+    -   **Simulated Annealing (`scipy.optimize.dual_annealing`):** Another metaheuristic that can escape local minima by accepting worse solutions with a certain probability.
+-   **Hybrid Approaches**: Combine a global search method (e.g., `differential_evolution` or a custom GA) to find promising regions of the search space, then use a local optimization method (`SLSQP`) to fine-tune the solution for higher precision.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+-   **Packing Density**: This problem is a classic example of maximizing packing density. Optimal packings are often 'tight', with many circles touching each other and/or the container boundaries.
+-   **Constraint Efficiency**: The `N*(N-1)/2` non-overlap constraints (496 for N=32) can be computationally intensive. Using squared distances `(xi-xj)² + (yi-yj)² - (ri + rj)² >= 0` is preferred for performance and avoids issues with derivatives of square roots.
+-   **Gradients**: For gradient-based local optimizers (like `SLSQP`, `trust-constr`), providing analytical gradients for the objective and constraint functions can significantly improve convergence speed and accuracy. If analytical gradients are not provided, `scipy.optimize` will use numerical differentiation, which is slower.
+-   **Symmetry**: While a perfectly symmetric solution for 32 circles in a square is unlikely, local hexagonal packing patterns are common. Exploiting potential symmetries (e.g., mirroring initial conditions) might help.
+-   **Edge Cases**: Smallest possible radii (`r_min > 0`) should be handled. Ensure circles don't escape the unit square.
+
+VALIDATION FRAMEWORK:
+-   **`_validate_circles(circles: np.ndarray) -> bool`**: A robust helper function to check if a given set of `(x,y,r)` circles satisfies *all* containment and non-overlap constraints.
+    -   It should iterate through each circle to check `r_i <= x_i <= 1-r_i` and `r_i <= y_i <= 1-r_i`.
+    -   It must then iterate through all unique pairs `(i,j)` to verify `√[(x_i-x_j)² + (y_i-y_j)²] >= r_i + r_j`. Return `False` immediately upon the first violation.
+-   **`_calculate_sum_radii(circles: np.ndarray) -> float`**: A simple helper function to calculate `np.sum(circles[:, 2])`.
+-   **Violation Metric**: Define a function that quantifies the *degree* of constraint violation (e.g., sum of all negative `(dist_sq - min_dist_sq)` values, or sum of distances circles are outside bounds). This can be useful for debugging, penalty methods in objective functions, or as a termination criterion.
+-   **Visual Inspection**: Although not part of the code, strongly recommend visualizing the resulting packing (e.g., using `matplotlib`) to intuitively verify correctness and identify potential issues.
+
+# PROMPT-BLOCK-END
+    

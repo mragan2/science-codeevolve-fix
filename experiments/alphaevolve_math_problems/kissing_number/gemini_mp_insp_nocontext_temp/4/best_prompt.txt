@@ -1,0 +1,62 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+-   **Evolutionary Algorithms (EAs)**: Given the `AlphaEvolve` benchmark, EAs (such as Genetic Algorithms or Evolutionary Strategies, leveraging packages like `deap` or `platypus`) are highly recommended. They are well-suited for exploring vast, high-dimensional combinatorial search spaces where direct enumeration is infeasible.
+    -   **Representation**: A "chromosome" could represent a subset of candidate points, or a sequence of operations to construct a set.
+    -   **Fitness Function**: The primary objective is to maximize the cardinality $|S|$ of the set. The fitness function must also strictly enforce the geometric constraint: sets that violate $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$ should be assigned a very low (or zero) fitness to strongly penalize invalid solutions.
+    -   **Mutation Operators**: Consider operations like adding a new point from a pre-generated candidate pool, removing an existing point, or perturbing the coordinates of an existing point (e.g., changing a single coordinate by $\pm 1$).
+    -   **Crossover Operators**: Strategies for combining point sets from two parent solutions (e.g., taking the union and pruning, or selecting points based on their contribution to the fitness).
+-   **Iterative Construction with Local Search**:
+    1.  **Candidate Pool Generation**: Pre-generate a large pool of integer points $P_{cand} \subset \mathbb{Z}^{11}$ with relatively small L2 norms (e.g., all points $p$ where $\|p\|_2^2 \le M$ for some chosen threshold $M$, typically in the range of 10-50). This significantly prunes the search space to "relevant" points.
+    2.  **Greedy Expansion**: Start with a small, valid initial set (e.g., the origin, or the two points generated in the initial code). Iteratively add points from $P_{cand}$ that maintain the geometric constraint and maximize $|S|$. Prioritize points that offer the best ratio of new distance to new norm.
+    3.  **Local Optimization**: After greedy expansion, apply local search techniques (e.g., simulated annealing, hill climbing with random restarts, or swapping points from the current set with points from the candidate pool) to escape local optima and further improve the set's cardinality.
+-   **Simulated Annealing (SA)**: Can be integrated into the iterative construction or used as a standalone metaheuristic to explore the solution space effectively, accepting "worse" solutions with decreasing probability to avoid getting stuck in local maxima.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+-   **Squared L2 Norms**: For computational efficiency and to avoid floating-point precision issues, perform all calculations using squared Euclidean norms. The condition becomes $\max_{i} \|p_i\|_2^2 \le \min_{i \neq j} \|p_i - p_j\|_2^2$. This is equivalent to comparing the square of the maximum radius from the origin to the square of the minimum pairwise distance.
+-   **Symmetry and Lattice Structure**: Optimal configurations often exhibit high degrees of symmetry. When generating candidate points or performing mutations, consider operations that preserve or introduce symmetry, such as permutations of coordinates and sign changes (e.g., if $(1,1,0,...)$ is a candidate, then $(\pm 1, \pm 1, 0, ...)$ and its permutations are also strong candidates). The integer lattice $\mathbb{Z}^{11}$ provides a structured search space.
+-   **Small Norm Points**: Points with small L2 norms (i.e., coordinates close to 0) are typically the most relevant for dense packings around the origin. Prioritize generating candidate points with small integer coordinates (e.g., 0, $\pm 1$, $\pm 2$, etc.). For example, points with squared norm 1 (e.g., $(\pm 1, 0, ..., 0)$), squared norm 2 (e.g., $(\pm 1, \pm 1, 0, ..., 0)$), etc.
+-   **Constraint Interpretation**: The condition implies that if we place open spheres of radius $R = \max \|p_i\|_2$ centered at each point $p_i$, they must not overlap, and all points must be contained within a sphere of radius $R$ centered at the origin. This is a self-referential sphere packing problem where the packing radius is determined by the extent of the packing itself.
+
+**Recommended implementation patterns**:
+-   **Numpy for Vectorized Operations**: Utilize `numpy` extensively for efficient calculations of squared norms and pairwise squared distances across multiple points. Vectorization is crucial for performance in high dimensions. Operations like `np.linalg.norm(points, axis=1)**2` for norms from origin and `np.sum((points[:, np.newaxis, :] - points[np.newaxis, :, :])**2, axis=2)` for pairwise distances are highly efficient.
+-   **Pre-computation of Candidate Points**: Generate a comprehensive list of candidate points (e.g., all integer points $p \in \mathbb{Z}^{11}$ such that $\|p\|_2^2 \le M$) once at the beginning. This pool can then be sampled or iterated over by the optimization algorithm.
+-   **Efficient Constraint Evaluation**: When adding a new point $p_{new}$ to an existing valid set $S$:
+    -   Update $\max \|p\|_2^2$: $R_{new}^2 = \max(R_{old}^2, \|p_{new}\|_2^2)$.
+    -   Update $\min \|p_i - p_j\|_2^2$: $D_{new}^2 = \min(D_{old}^2, \min_{p \in S} \|p_{new} - p\|_2^2)$.
+    This avoids recomputing all $O(|S|^2)$ pairwise distances from scratch for every candidate point, significantly speeding up the evaluation of potential additions.
+-   **Fixed Random Seed**: As per requirements, ensure full reproducibility by setting a fixed random seed for all stochastic components (e.g., `np.random.seed(42)`).
+-   **Performance Optimization (Numba/Cython)**: For computationally intensive loops, especially in fitness evaluation or distance calculations that cannot be fully vectorized, consider using `numba.jit` or `cython` to achieve C-like performance.
+
+# PROMPT-BLOCK-END

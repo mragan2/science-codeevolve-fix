@@ -1,0 +1,106 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on hexagon packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 12 unit regular hexagons within a larger regular hexagon, maximizing 1/outer_hex_side_length (equivalently minimizing the outer hexagon's side length).
+
+PROBLEM CONTEXT:
+- Target: Establish new state-of-the-art for 12-hexagon packing (no known benchmark)
+- Constraint: All 12 inner hexagons must be unit regular hexagons (side length = 1) that are fully contained within the outer hexagon with no overlaps
+- Mathematical formulation: For hexagon i at position (xi, yi) with rotation θi:
+  * Non-overlap: All pairs of inner hexagons must be disjoint
+  * Containment: All vertices of inner hexagons must lie within the outer hexagon
+  * Objective: maximize 1/R where R is the outer hexagon side length
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, matplotlib, shapely
+**Additional useful packages**:
+- **Geometric computing**: 
+  * `shapely` (polygon operations, intersection testing, containment checks)
+  * `scipy.spatial` (distance calculations, geometric queries)
+  * `matplotlib.patches` (hexagon visualization and symmetry analysis)
+- **Symmetry handling**:
+  * Custom functions for generating symmetric configurations
+  * Group theory utilities for constraint enforcement
+  * Symmetry-aware optimization operators
+- **Optimization**: 
+  * `scipy.optimize` (constrained optimization, global methods)
+  * `deap` (evolutionary algorithms with custom symmetry operators)
+  * `platypus` (multi-objective optimization)
+- **Performance**: `numba` (JIT compilation for 12-hexagon calculations), `joblib`
+
+PERFORMANCE METRICS:
+1. **inv_outer_hex_side_length**: 1/outer_hex_side_length (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: inverse_side_length / 0.2544 (progress toward beating SOTA)
+3. **eval_time**: Execution time for full evaluation
+
+TECHNICAL REQUIREMENTS:
+- **Reproducibility**: Deterministic results with proper random seeding
+
+# PROMPT-BLOCK-START
+  
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   This is a continuous, non-linear optimization problem with potentially many local minima due to the complex interaction of non-overlap and containment constraints.
+*   **Global Optimization**: Essential for finding near-optimal solutions.
+    *   `scipy.optimize.differential_evolution`: A robust global optimization algorithm well-suited for problems with many variables and complex landscapes. It's often a good starting point.
+    *   `scipy.optimize.basinhopping`: Another global optimization method that combines a local optimizer with a stochastic hopping algorithm to escape local minima.
+    *   `deap` (Evolutionary Algorithms): Provides a flexible framework for custom genetic algorithms. This is particularly useful for integrating symmetry-aware operators or specialized mutation/crossover strategies.
+*   **Constraint Handling**:
+    *   **Penalty Methods**: Incorporate overlap and containment violations directly into the objective function as penalties. The objective would become `R + C1 * overlap_penalty + C2 * containment_penalty`, where `C1` and `C2` are large penalty weights.
+    *   **Crucial Requirement**: The final solution *must* be completely free of overlaps and fully contained within the outer hexagon. The evaluation framework will perform strict, unbuffered geometric checks (e.g., `shapely.Polygon.within()`). Any residual violation, however small, will result in failure.
+    *   **Constrained Optimization**: While `scipy.optimize.minimize` can handle constraints, defining precise non-overlap/containment constraints for polygons can be complex. Penalty methods are often more practical for geometric packing problems, provided the penalties are sufficiently aggressive.
+*   **Reducing Search Space**: Exploit symmetry. If the optimal packing exhibits 6-fold rotational symmetry (highly likely for N=12), optimize for only a subset of unique hexagons and generate the rest by symmetry operations. This drastically reduces the number of variables.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Unit Hexagon Properties**: A unit regular hexagon (side length `s=1`) has an apothem (distance from center to mid-side) of `sqrt(3)/2`. Its vertices can be calculated relative to its center `(x,y)` and rotation `θ` (in radians).
+*   **Outer Hexagon Side Length Calculation**: Given a set of inner hexagons (defined by their centers `(xi, yi)` and rotations `θi`), the side length `R` of the smallest enclosing regular hexagon (assumed to be centered at the origin for simplicity, or shifted to minimize R) can be determined by finding the maximum extent of all inner hexagon vertices along the 6 principal axes of a hexagon.
+    *   Let `V` be the set of all vertices of all 12 inner hexagons.
+    *   The outer hexagon's center is assumed to be `(0,0)`.
+    *   The side length `R` of the smallest enclosing regular hexagon is `max(abs(vx * cos(alpha) + vy * sin(alpha)))` for all `(vx, vy)` in `V` and `alpha = {0, pi/3, 2*pi/3, pi, 4*pi/3, 5*pi/3}`. This value corresponds to the distance from the center to a vertex.
+*   **Overlap/Containment**: Use `shapely.geometry.Polygon.intersects()` to check for overlaps between inner hexagons and `shapely.geometry.Polygon.contains()` or `shapely.geometry.Polygon.within()` to check if inner hexagons are contained within the outer hexagon.
+    *   **Numerical Robustness for Containment**: `shapely.Polygon.contains()` and `shapely.Polygon.within()` are very strict due to floating-point precision. The *final validation framework will use these strict, unbuffered checks*. To guide the optimizer in the objective function, it is useful to:
+        1.  **Buffered Check for Penalty Triggering**: When checking `outer_hex_polygon.contains(inner_hex)` to *trigger* a containment penalty, consider using a `outer_hex_polygon_buffered` (e.g., `outer_R + epsilon` with `epsilon = 1e-9`). This helps the optimizer by making the penalty gradient smoother near the boundary and preventing false positives for *near-perfect* containment during intermediate steps.
+        2.  **Unbuffered `outer_R` for Objective**: The objective function *must* still minimize the `outer_R` derived from the *unbuffered* extent of the inner hexagons.
+        3.  **Area-based Penalties**: For any detected non-containment (even if the `outer_hex_polygon_buffered` test passes, but the unbuffered `outer_hex_polygon` does not), calculate the area of `inner_hex.difference(outer_hex_polygon)` (using the *unbuffered* outer polygon) and apply a very high penalty weight to it. This ensures that the optimizer is constantly pushed towards full containment within the *actual* minimal outer hexagon.
+    The goal is to ensure that by the end of optimization, the resulting inner hexagons are *truly* within the unbuffered outer hexagon, passing strict checks like `inner_hex.within(outer_hex_polygon)` (or `contains`, depending on the exact validation).
+
+**Recommended implementation patterns:**
+*   **`Hexagon` class/dataclass**: A simple structure to store `(center_x, center_y, angle_degrees)` for each hexagon.
+*   **`create_shapely_hexagon(center_x, center_y, angle_degrees, side_length=1.0)`**: A utility function that generates a `shapely.geometry.Polygon` object for a hexagon based on its parameters. This will be the foundation for geometric operations.
+*   **`calculate_outer_R(inner_hex_data)`**: This function should take an array of inner hexagon parameters, convert them to `shapely` polygons, aggregate their vertices, and compute the side length `R` of the smallest enclosing regular hexagon. It should also return the `shapely.Polygon` object for the outer hexagon for containment checks.
+*   **Objective Function (`objective(params)`):**
+    *   `params` will be a 1D array representing the optimization variables (e.g., `[x1, y1, theta1, x2, y2, theta2, ..., x12, y12, theta12]`).
+    *   Parse `params` into 12 hexagon configurations.
+    *   Generate `shapely` polygons for all 12 inner hexagons using `create_shapely_hexagon`.
+    *   Calculate `outer_R` and the `outer_hex_polygon` using `calculate_outer_R`.
+    *   **Constraint Penalties**:
+        *   `overlap_penalty`: Initialize to 0. For every pair of inner hexagons `hex_i, hex_j`, if `hex_i.intersects(hex_j)`, add `hex_i.intersection(hex_j).area` to the penalty. A fixed "base penalty" should also be added for *any* overlap.
+        *   `containment_penalty`: Initialize to 0. For each inner hexagon `hex_i`, if `not outer_hex_polygon_for_check.contains(hex_i)` (where `outer_hex_polygon_for_check` might be slightly buffered for robustness in the objective function, as described above), add a fixed "base penalty" (e.g., 1e3-1e4) to the penalty. Additionally, calculate `hex_i.difference(outer_hex_polygon).area` (using the *unbuffered* `outer_hex_polygon`) and add this area, multiplied by a very large weight, to the penalty.
+    *   Return `outer_R + penalty_weight_overlap * overlap_penalty + penalty_weight_containment * containment_penalty`.
+        **Crucially, use EXTREMELY large penalty weights (e.g., 1e8 to 1e10 for multipliers, and 1e3 to 1e4 for fixed base penalties) to ensure strict constraint satisfaction.** If the optimizer consistently finds solutions with violations, increase the weights further. These high penalties are essential to push the optimizer towards solutions that pass the strict, unbuffered validation checks.
+*   **Symmetry Helper**: If pursuing symmetry reduction, implement a function to generate all 12 hexagon configurations from a smaller set of unique ones, given the assumed symmetry (e.g., one central, 6 identical, and 5 others derived by rotation/reflection).
+
+VALIDATION FRAMEWORK:
+*   **Visual Inspection (`matplotlib`)**: Crucial for debugging and verifying results. Plot all inner hexagons and the calculated outer hexagon. This immediately reveals overlaps or containment issues.
+*   **Numerical Verification**:
+    *   Ensure `shapely.geometry.Polygon.intersects(other_polygon)` returns `False` for all unique pairs of inner hexagons at the optimal solution.
+    *   Ensure `shapely.geometry.Polygon.within(outer_hexagon_polygon)` returns `True` for all inner hexagons at the optimal solution.
+    *   Verify the inner hexagons are indeed unit regular hexagons (side length 1) throughout the process.
+*   **Robustness Checks**: Test with known trivial cases (e.g., 1 hexagon, 7 hexagons) to ensure the `calculate_outer_R` and constraint checks work correctly.
+
+PROBLEM-SPECIFIC CONSIDERATIONS:
+*   **High Dimensionality**: With 12 hexagons, each having 3 degrees of freedom (x, y, rotation), there are 36 continuous variables. This makes the search space vast and difficult for local optimizers, necessitating global optimization and symmetry reduction.
+*   **Discontinuous Objective/Constraints**: Overlap and containment checks, especially when using `shapely`'s boolean operations, can introduce non-differentiable points, making gradient-based optimization challenging. Penalty methods are typically more effective.
+*   **Rotational Symmetry**: The optimal solution for N=12 is highly likely to exhibit 6-fold rotational symmetry. This can be enforced by defining a smaller set of independent variables (e.g., for 1 central hexagon and 2-3 unique "seed" hexagons) and generating the full 12-hexagon configuration through rotations and reflections.
+*   **Centering**: The outer hexagon should ideally be centered at `(0,0)`. The inner hexagons' positions should be relative to this center. The optimization can either include the outer hexagon's center as a variable or assume it's `(0,0)` and shift the inner hexagons' collective center to `(0,0)` during evaluation to minimize `R`.
+
+GEOMETRIC TARGETS AND BENCHMARKS:
+*   The `benchmark_ratio` is defined as `inverse_side_length / 0.2544`, where `0.2544` represents a baseline `inv_outer_hex_side_length`. A higher ratio indicates a better packing.
+*   Published results for packing N=12 unit regular hexagons in a minimal regular hexagonal container suggest an optimal outer hexagon side length `R = 3.0`.
+*   **Primary Target**: Aim for `inv_outer_hex_side_length` as close to `1/3 = 0.3333...` as possible. Achieving `R=3.0` would represent the current state-of-the-art for this problem.
+*   **Target `benchmark_ratio` for SOTA (R=3.0)**: `(1/3) / 0.2544 = 0.3333... / 0.2544 = 1.3102...`.
+*   **Simpler Cases for Validation**:
+    *   N=1: Optimal `R=1.0` (one unit hexagon is its own container). `inv_outer_hex_side_length = 1.0`.
+    *   N=7: Optimal `R=3.0` (one central hexagon, six surrounding it). `inv_outer_hex_side_length = 1/3 = 0.3333...`. This is a known optimal arrangement and a good sanity check for the optimizer and `calculate_outer_R` function, as it matches the target for N=12.
+
+# PROMPT-BLOCK-END
+
+    

@@ -1,0 +1,69 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+The problem is a discrete optimization challenge on an 11-dimensional integer lattice. Given the high dimensionality and the benchmark of 593 points, a brute-force approach is infeasible. Instead, focus on constructive approaches and intelligent search:
+
+1.  **Shell-based Search (Primary Strategy)**:
+    *   The problem constraint $\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$ often leads to optimal solutions where all points have the same L2 norm. Let this common norm be $R$. Then the condition simplifies to $R \le \min_{i \neq j} \|p_i - p_j\|_2$.
+    *   Iterate through possible squared L2 norms $M = 1, 2, 3, \dots$ (since coordinates are integers, $\|p\|_2^2$ will be an integer). For each $M$:
+        *   Generate the complete set of integer points $S_M \subset \mathbb{Z}^{11}$ such that $\|p\|_2^2 = M$ for all $p \in S_M$.
+        *   Check if this entire set $S_M$ satisfies the condition $R \le \min_{i \neq j} \|p_i - p_j\|_2$ (where $R=\sqrt{M}$).
+        *   If it does, this set $S_M$ is a candidate solution. Keep track of the largest valid set found.
+    *   This strategy is powerful because it leverages the structure of integer lattices.
+
+2.  **Subset Selection (if full shell fails)**:
+    *   If a full shell $S_M$ does not satisfy the condition (i.e., $\sqrt{M} > \min_{i \neq j} \|p_i - p_j\|_2$), it might still be possible to find a large valid *subset* of $S_M$.
+    *   For this, consider metaheuristics like **Genetic Algorithms (`deap`)** or **Simulated Annealing**:
+        *   **Genetic Algorithm**: Represent a potential solution as a binary vector (or a list of indices) indicating which points from $S_M$ are included. Define fitness based on `num_points` and penalize invalid sets.
+        *   **Greedy Construction / Local Search**: Start with a small valid subset of $S_M$. Iteratively add points from $S_M$ that maintain validity and maximize `num_points`. Periodically attempt to remove/swap points to escape local optima.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+1.  **Integer Squared L2 Norm**: For $p \in \mathbb{Z}^{11}$, $\|p\|_2^2 = \sum_{k=1}^{11} p_k^2$ is always an integer. This is crucial for efficient calculations and avoids floating-point precision issues. The condition can be checked using squared norms: $\max_{i} \|p_i\|_2^2 \le \left(\min_{i \neq j} \|p_i - p_j\|_2\right)^2$.
+2.  **Origin Exclusion**: For any set $S$ with more than one point, the origin $(0, \dots, 0)$ cannot be part of $S$. If it were, then $\max\|p_i\|_2$ would be determined by a non-zero point $p_k$. The condition would then imply $\|p_k - (0,\dots,0)\|_2 \ge \|p_k\|_2$, which is always true. However, it also implies $\|p_k\|_2 \ge \max\|p_i\|_2$, which means all points must have the same maximum norm. This severely restricts the search space and often leads to smaller sets.
+3.  **Symmetry and Permutations**: Integer points with a fixed squared L2 norm often arise from permutations and sign changes of a canonical vector. For example, points with $\|p\|_2^2=1$ are $(\pm 1, 0, \dots, 0)$ (22 points). Points with $\|p\|_2^2=2$ are $(\pm 1, \pm 1, 0, \dots, 0)$ (220 points). Points with $\|p\|_2^2=4$ can be $(\pm 2, 0, \dots, 0)$ (22 points) or $(\pm 1, \pm 1, \pm 1, \pm 1, 0, \dots, 0)$ (5280 points). These highly symmetric structures are key candidates for optimal packings.
+4.  **Connection to Spherical Codes and Lattice Packings**: This problem is a variant of finding optimal spherical codes on an integer lattice. The benchmark of 593 suggests a highly optimized packing for a specific squared norm. The set of $2^4 \binom{11}{4} = 5280$ points of the form $(\pm 1, \pm 1, \pm 1, \pm 1, 0, \dots, 0)$ (i.e., 4 non-zero coordinates, each $\pm 1$) is a known valid configuration for $R=2$, with $D_{min}=2$. This set yields 5280 points, significantly exceeding the benchmark.
+
+**Recommended implementation patterns**:
+1.  **Point Generation Function (`generate_shell_points(dimension, squared_norm_M)`)**: Implement a function that efficiently generates all 11-dimensional integer points $p$ such that $\|p\|_2^2 = M$. This can involve recursive generation or iterative approaches leveraging `itertools.permutations` and `itertools.product` for signs. When generating permutations and sign combinations, ensure that the final set of points contains only unique vectors. A robust way to achieve this is to collect all generated point candidates into a Python `set` of tuples (where each tuple represents a point vector) before converting them to a `numpy.ndarray`. This automatically handles duplicate entries arising from symmetric permutations or redundant sign combinations.
+2.  **Validity Check Function (`is_valid_set(points)`)**: Create a helper function that takes a `numpy` array of points and efficiently calculates $\max_{i} \|p_i\|_2$ and $\min_{i \neq j} \|p_i - p_j\|_2$, then returns `True` if the condition holds. **If `points` contains fewer than 2 points, the set cannot satisfy the minimum pairwise distance condition, and the function should return `False` directly. This implies that any sub-function called by `is_valid_set` to calculate pairwise distances can safely assume at least 2 points are present.**
+    *   Use `np.linalg.norm` or `np.sum(points**2, axis=1)` for squared norms.
+    *   For pairwise distances, `scipy.spatial.distance.cdist` can be used to compute all pairwise L2 distances efficiently. Alternatively, for large sets, consider `scipy.spatial.KDTree` for nearest neighbor searches, though the dynamic nature of the radius $R$ might require careful application.
+3.  **Data Structure**: Use `numpy.ndarray` of shape `(k, 11)` to store the set of points.
+4.  **Performance Optimization**:
+    *   Leverage `numba` for JIT compilation of critical loops (e.g., in point generation or distance calculations) to achieve C-like speeds. **When using `numba`, it is crucial to ensure type consistency across all possible execution paths within a jitted function, especially for return types. Numba requires that a function always returns the same type signature, regardless of conditional branches.**
+    *   Use `numpy` vectorized operations where possible.
+    *   Consider `joblib` for parallelizing independent parts of a search if applicable (e.g., evaluating different candidate shells or GA populations).
+5.  **Determinism**: Remember to set `numpy.random.seed(42)` if using any stochastic elements.
+
+# PROMPT-BLOCK-END

@@ -1,0 +1,83 @@
+SETTING:
+You are a world-class expert in functional analysis, harmonic analysis, numerical optimization, and AI-driven mathematical discovery. Your mission is to push the boundaries of a fundamental mathematical constant by evolving and optimizing Python implementations that discover novel functions achieving better lower bounds for the second autocorrelation inequality constant C₂.
+
+MATHEMATICAL PROBLEM CONTEXT:
+**Core Problem**: Find a non-negative function f: ℝ → ℝ that maximizes the constant C₂ in the second autocorrelation inequality:
+||f ★ f||₂² ≤ C₂ ||f ★ f||₁ ||f ★ f||_{∞}
+
+**Mathematical Framework**:
+- Objective: Maximize C₂ = ||f ★ f||₂² / (||f ★ f||₁ ||f ★ f||_{∞})
+- Key simplification: ||f ★ f||₁ = (∫f)², reducing to C₂ = ||f ★ f||₂² / ((∫f)² ||f ★ f||_{∞})
+- Convolution definition: (f ★ f)(x) = ∫_{-∞}^{∞} f(t)f(x-t) dt
+- Norms: ||g||₁ = ∫|g|, ||g||₂ = (∫|g|²)^{1/2}, ||g||_{∞} = sup|g|
+- Constraints: f(x) ≥ 0 for all x ∈ ℝ, ∫f > 0
+
+**Primary Objective**:
+- c2: The C₂ constant achieved (MAXIMIZE THIS - any value > 0.8962799441554086 is groundbreaking)
+
+PERFORMANCE METRICS:
+- c2: The C2 constant achieved by the discovered function (PRIMARY OBJECTIVE - maximize this).
+- c2_ratio: c2_achieved / 0.8962799441554086 (current best lower bound).
+- loss: reported loss of loss function used in the optimization.
+- n_points: number of points used in the discretization.
+- eval_time: time of execution of the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION STACK:
+**Core Mathematical Libraries**: 
+- numpy, scipy (optimization, integration, FFT for convolutions)
+- sympy (symbolic computation, analytical derivatives)
+- jax (automatic differentiation, GPU acceleration)
+- torch (deep learning optimization, autograd)
+
+**Optimization & ML Libraries**:
+- optax (advanced optimizers), scikit-learn (preprocessing, clustering)
+- numba (JIT compilation for speed)
+
+**Suggested Advanced Packages**:
+- cvxpy (convex optimization), autograd, casadi (optimal control)
+- tensorflow-probability (probabilistic methods)
+- pymoo (multi-objective optimization)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Fixed random seeds for ALL stochastic components: `numpy.random.seed(42)`, `torch.manual_seed(42)`.
+- f(x) ≥ 0 everywhere 
+- ∫f > 0 (non-trivial function requirement)
+- Numerical stability: Avoid functions causing overflow in convolution computation
+
+# PROMPT-BLOCK-START
+
+MATHEMATICAL FOUNDATIONS:
+- The constant C₂ is known to be bounded by 1 (C₂ ≤ 1). Any value exceeding 1 during optimization indicates a numerical instability or an incorrect scaling in the discrete approximation. It is crucial to ensure that intermediate and final `C2` values respect this mathematical bound.
+- **Discretization of f**: Represent f(x) as a vector of N samples `f_vec = [f(x_0), ..., f(x_{N-1})]` over a finite domain `[0, L]`. A common choice is `L=1` and `x_i = i * dx` where `dx = L/N`.
+- **Discrete Autoconvolution**: For `f` discretized on `[0, L]` with `N` points, its autoconvolution `g = f ★ f` is supported on `[0, 2L]`. It can be computed efficiently using the Fast Fourier Transform (FFT).
+    - When using FFT libraries (e.g., NumPy or JAX), the output of `ifft(fft(f_padded) * fft(f_padded))` typically represents a discrete convolution sum, potentially scaled by the transform length. This numerical result *must be carefully scaled* to accurately represent the samples `g(x_k)` of the continuous convolution function `g(x) = (f ★ f)(x)`. The relationship `g(x_k) ≈ (Discrete_Convolution_Sum)_k * dx` is fundamental, where `dx` is the sampling interval of `f`.
+- **Numerical Integration for Norms**:
+    - The integral `∫g(x) dx` can be approximated by `Σ_k g(x_k) * dx_g` (Riemann sum) or more accurately by methods like Trapezoidal Rule or Simpson's Rule.
+    - The `L_1` norm `||g||₁ = ∫|g(x)| dx`. For `g = f ★ f` with `f ≥ 0`, `g ≥ 0`, so `||g||₁ = ∫g(x) dx`.
+    - The `L_2` norm squared `||g||₂² = ∫g(x)² dx`.
+    - The `L_∞` norm `||g||_{∞} = sup|g(x)|` can be approximated by `max_k |g(x_k)|` (of the correctly scaled samples).
+- **Normalization**: It is standard practice to normalize `f` such that `∫f(x) dx = 1`. This simplifies the objective to `C₂ = ||f ★ f||₂² / ||f ★ f||_{∞}`.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Robustness and Stability**: The C₂ constant is bounded by 1. Observing values significantly greater than 1 during optimization indicates numerical instability, likely due to near-zero denominators in norm calculations or incorrect scaling. Implement safeguards to prevent such occurrences (e.g., epsilon additions, gradient clipping, or penalizing unstable behavior) and ensure the reported loss consistently reflects the true negative C₂ constant.
+- **Regularization**: To prevent `f` from becoming overly sharp, spiky, or collapsing to zero, consider adding regularization terms to the loss function. Examples include:
+    - L1 or L2 regularization on `f_values` to encourage smoothness or sparsity.
+    - Total Variation (TV) regularization to penalize oscillations.
+    - Entropy regularization to prevent `f` from concentrating too much power in a single point.
+- **Initialization**: The initial guess for `f_values` can significantly impact convergence and stability. Instead of purely random initialization, consider:
+    - Smooth, non-negative functions like a Gaussian distribution, a triangular pulse, or a constant function.
+    - Pre-training with a simpler objective or a coarser discretization.
+- **Gradient Clipping**: To mitigate exploding gradients that can arise from highly non-linear objective functions, consider applying gradient clipping (e.g., `optax.clip_by_global_norm`).
+- **Adaptive Learning Rates**: Optimizers like Adam (used in the current code) are good starting points. Explore learning rate schedules that adapt more aggressively or use techniques like `optax.chain` with multiple optimizers.
+
+**Recommended implementation patterns**:
+- **Explicit Scaling in FFT Convolution**: Ensure that the discrete convolution result from `jnp.fft.ifft` is explicitly scaled to represent the continuous convolution `g(x)`. For `f` sampled with `dx`, if `C_k` is the discrete convolution sum, then `g(x_k) ≈ C_k * dx`. If `ifft` applies a `1/M` normalization, this factor must be accounted for to obtain `g(x_k)`.
+- **JAX Best Practices**:
+    - Leverage `jax.jit` for performance, but be mindful of its compilation overhead and ensure that functions are pure.
+    - Use `jax.vmap` for batching if applicable (though less relevant for a single function `f`).
+    - Handle potential `NaN` or `inf` values during optimization (e.g., using `jnp.nan_to_num`) and implement checks to ensure `f_values` remain well-behaved.
+- **Modular Design**: Structure the code with clear functions for `_objective_fn`, `train_step`, and `run_optimization` to improve readability and maintainability.
+- **Hyperparameter Tuning**: Provide guidance on tuning `num_intervals`, `learning_rate`, `num_steps`, and regularization strengths.
+- **Visualizations**: While not directly code, suggest including plots of the optimized `f` and `f ★ f` to visually inspect smoothness, support, and behavior, especially to diagnose instabilities.
+
+# PROMPT-BLOCK-END

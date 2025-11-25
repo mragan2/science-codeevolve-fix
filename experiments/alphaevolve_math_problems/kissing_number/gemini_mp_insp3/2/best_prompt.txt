@@ -1,0 +1,70 @@
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+SETTING:
+You are an expert in computational geometry, discrete optimization, and high-dimensional lattice theory. Your goal is to find a maximal set of integer points in 11 dimensions satisfying specific geometric constraints.
+
+PROBLEM CONTEXT:
+You are tasked with finding the largest possible set of distinct points $S = \{p_1, \dots, p_k\}$ in the 11-dimensional integer lattice $\mathbb{Z}^{11}$ such that two conditions are met:
+1. All points $p_i$ must have integer coordinates.
+2. Let $M = \max_{p \in S} ||p||_2$ be the maximum Euclidean norm of any point in $S$ from the origin.
+3. Let $D = \min_{p_i \ne p_j \in S} ||p_i - p_j||_2$ be the minimum Euclidean distance between any two distinct points in $S$.
+4. The crucial constraint is $M < D$.
+Your objective is to maximize $k = |S|$, the number of points in the set. The benchmark `593` suggests that the optimal solution is likely a large, highly symmetric configuration.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+Given the high dimensionality and the integer coordinate constraint, brute-force search is infeasible. This problem is a combinatorial optimization challenge requiring sophisticated search techniques.
+- **Heuristic Search**:
+    - **Greedy Construction**: Start with a small, valid set of points. Iteratively try to add new candidate points that maintain the $M < D$ property. Prioritize candidates that are "close" to the origin to keep $M$ low, and "far" from existing points to keep $D$ high.
+    - **Local Search / Simulated Annealing**: Start with a valid configuration. Perturb it by adding, removing, or slightly modifying points. Accept improvements, and occasionally accept worse solutions to escape local optima.
+- **Evolutionary Algorithms (e.g., Genetic Algorithms, using `deap` library)**:
+    - Represent a set of points as an individual in a population.
+    - Define a fitness function that maximizes $k$ while penalizing violations of the $M < D$ constraint.
+    - Evolve populations of point sets over generations.
+- **Symmetry Exploitation**: The integer lattice has high symmetry. If a point $p$ is in $S$, then often related points like $-p$, permutations of coordinates of $p$, or sign changes of coordinates of p can also be in $S$. Constructing points with specific symmetries (e.g., points where all non-zero coordinates are $\pm 1$) can yield large sets.
+- **Candidate Pool Generation**: Generate a large pool of candidate integer points (e.g., all integer points within a certain radius from the origin, or points with specific coordinate patterns like $\{-1, 0, 1\}$). Then, select an optimal subset from this pool.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **No Origin**: The origin $(0, \dots, 0)$ cannot be part of $S$ if $|S| > 1$. If it were, $M$ would be determined by the non-zero points, but $D$ would be bounded by the minimum norm of any non-zero point, leading to a contradiction with $M < D$.
+- **Strictly Greater Minimum Distance**: Since all points are distinct integer vectors, the minimum possible Euclidean distance between any two distinct integer points is 1. If $D=1$, then the constraint $M<D$ implies $M<1$. However, for any non-zero integer point $p$, $||p|| \ge 1$, which means $M \ge 1$. This is a contradiction. Therefore, $D$ must be strictly greater than 1 (i.e., $D > 1$). This rules out many simple point arrangements where points are separated by distance 1.
+- **Sphere Packing Analogy**: The condition $M < D$ implies that if we place open spheres of radius $M/2$ around each point $p \in S$, these spheres are disjoint. Furthermore, all points $p \in S$ are contained within an open sphere of radius $M$ centered at the origin.
+- **Symmetric Point Configurations**: Consider sets of points with highly symmetric structures, such as:
+    - **Antipodal basis vectors**: The set of $2 \times 11 = 22$ points consisting of $(\pm 1, 0, \dots, 0)$, $(0, \pm 1, 0, \dots, 0)$, ..., $(0, \dots, 0, \pm 1)$. For this set, $M=1$ and $D=\sqrt{2}$. Since $1 < \sqrt{2}$, this set of 22 points is a valid starting configuration.
+    - Points with multiple non-zero coordinates, e.g., all coordinates are $\pm 1$.
+    - These types of configurations are often found in coding theory (e.g., construction of error-correcting codes) and lattice theory.
+
+**Recommended implementation patterns**:
+- **Efficient Distance/Norm Calculation**: Use `numpy` for vectorized operations to compute norms and distances efficiently.
+- **Spatial Indexing (`scipy.spatial.KDTree`)**: When dealing with a large set of candidate points or an evolving set $S$, `KDTree` can significantly speed up the calculation of minimum pairwise distances ($D$) and nearest neighbor searches, which are crucial for validating the $M < D$ constraint.
+- **Iterative Refinement Loop**:
+    1. Initialize $S$ with a small, valid set (e.g., the set of 22 points: $\{\pm e_i \mid i=1,\dots,11\}$).
+    2. Define a pool of candidate points (e.g., integer points with small $L_2$ norm, or points generated by symmetry operations).
+    3. In a loop:
+        a. Select a candidate point $p_{cand}$ from the pool.
+        b. Temporarily add $p_{cand}$ to $S$ to form $S'$.
+        c. Recalculate $M_{S'}$ and $D_{S'}$.
+        d. If $M_{S'} < D_{S'}$, accept $p_{cand}$ and update $S = S'$.
+        e. If no more points can be added, or a certain iteration limit is reached, stop.
+    4. Consider more advanced search strategies like local search or genetic algorithms if simple greedy addition is insufficient.
+- **Pre-filtering Candidate Points**: Before checking against $S$, pre-filter candidate points $p_{cand}$ by ensuring $||p_{cand}|| < D_{current}$ and $||p_{cand} - p_i|| \ge D_{current}$ for all $p_i \in S$. This can significantly reduce the number of expensive full set checks.
+- **Fixed Random Seed**: For any stochastic components (e.g., selecting candidate points randomly), ensure reproducibility by setting `numpy.random.seed(42)`.
+
+# PROMPT-BLOCK-END

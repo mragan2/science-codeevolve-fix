@@ -1,0 +1,52 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Iterative Point Generation and Pruning**: Start by generating candidate points within a certain L2-norm bound. Then, iteratively prune points that violate the geometric constraint. This pruning can be done greedily (e.g., remove points that are too close to existing points with higher norms, or remove points that cause the minimum distance to drop below the maximum norm).
+- **Graph-based Approaches**: Construct a graph where nodes are candidate points and edges connect points that violate the minimum distance constraint. The problem then becomes finding a maximum independent set in this graph, which is NP-hard but can be approximated.
+- **Genetic Algorithms / Simulated Annealing**: These metaheuristics can explore the search space of point sets. They would require a fitness function that incorporates both the number of points and the satisfaction of the geometric constraint.
+- **Layered Construction**: Consider points from different "shells" (i.e., different squared L2 norms). For example, points with `||p||_2^2 = N_1` and points with `||p||_2^2 = N_2`. Careful selection is needed to ensure `max(N_1, N_2) \le \min_{p_i, p_j} \|p_i - p_j\|_2^2`.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **The Core Constraint**: The condition `max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2` implies that if $R_{max}^2 = \max_{i} \|p_i\|_2^2$ and $D_{min}^2 = \min_{i \neq j} \|p_i - p_j\|_2^2$, then $R_{max}^2 \le D_{min}^2$.
+- **Failure of Naive `C_N` Construction**: As observed in previous attempts, simply taking all integer points `p` with `\|p\|_2^2 = N` (denoted `C_N`) often fails the constraint. For `N=4` in 11 dimensions, the set `C_4` contains points `p_1 = (1, 0, 1, 1, 1, 0, ..., 0)` and `p_2 = (0, -1, 1, 1, 1, 0, ..., 0)`. Both `p_1` and `p_2` have `\|p\|_2^2 = 4`, but their squared distance `\|p_1 - p_2\|_2^2 = \|(1, 1, 0, ..., 0)\|_2^2 = 2`. Since $R_{max}^2 = 4$ and $D_{min}^2 = 2$, the condition $4 \le 2$ is violated. This demonstrates that a simple "all points on a shell" strategy is insufficient without further pruning.
+- **Lattice Structures**: Points in `\mathbb{Z}^{11}` form a cubic lattice. Sublattices like `D_{11}` (points with even coordinate sum) might be relevant. The minimum squared norm of a non-zero vector in `D_{11}` is 2, and the minimum squared distance between any two `D_{11}` lattice points is also 2. This implies any subset of `D_{11}` where $R_{max}^2 \le 2$ will satisfy the constraint. For example, points in `D_{11}` with `\|p\|_2^2 = 2` form a valid set of 220 points, satisfying the condition `2 <= 2`.
+- **Optimal Constructions**: High-dimensional sphere packing problems often involve highly symmetric configurations. The benchmark of 593 points in 11D suggests a sophisticated construction, potentially related to specific layers of highly dense lattices (e.g., `A_n^*`, `D_n^*` or other integral lattices). The problem is a variant of finding a "maximal code" in Euclidean space.
+
+**Recommended implementation patterns**:
+- **Efficient Distance Calculation**: Utilize `scipy.spatial.KDTree` for fast nearest neighbor queries, crucial for pruning and verification.
+- **Numpy for Vectorized Operations**: Perform calculations on arrays of points efficiently.
+- **JIT Compilation with Numba**: For critical loops (e.g., distance calculations, point generation), `numba` can provide significant speedups.
+- **Set Data Structures**: Use Python `set` or `frozenset` to manage unique points and avoid duplicates, especially when generating permutations and sign combinations.
+
+# PROMPT-BLOCK-END

@@ -1,0 +1,84 @@
+SETTING:
+You are an expert computational geometer and optimization specialist focusing on circle packing problems.
+Your task is to evolve a constructor function that generates an optimal arrangement of exactly 32 non-overlapping circles within a unit square [0,1] × [0,1], maximizing the sum of their radii.
+
+PROBLEM CONTEXT:
+- Target: Beat the AlphaEvolve benchmark of sum_radii = 2.937944526205518
+- Constraint: All circles must be fully contained within the unit square with no overlaps
+- Mathematical formulation: For circle i at position (xi, yi) with radius ri:
+  * Containment: ri ≤ xi ≤ 1-ri and ri ≤ yi ≤ 1-ri
+  * Non-overlap: √[(xi-xj)² + (yi-yj)²] ≥ ri + rj for all i≠j
+  * Objective: maximize Σri subject to above constraints
+
+COMPUTATIONAL RESOURCES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization)
+
+PERFORMANCE METRICS:
+1. **sum_radii**: Total sum of all 32 circle radii (PRIMARY OBJECTIVE - maximize)
+2. **benchmark_ratio**: sum_radii / 2.937944526205518 (progress toward beating benchmark)  
+3. **eval_time**: Execution time in seconds (keep reasonable, prefer accuracy over speed)
+
+TECHNICAL REQUIREMENTS:
+- **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility
+- **Error handling**: Graceful handling of optimization failures or infeasible configurations
+- **Memory efficiency**: Avoid excessive memory allocation for distance matrix computations
+- **Scalability**: Design with potential extension to different circle counts in mind
+
+# PROMPT-BLOCK-START
+
+**Recommended implementation patterns:**
+Given the complexity (32 circles, non-linear constraints, non-convex objective with many local optima), direct analytical solutions are infeasible. Metaheuristic optimization, particularly evolutionary algorithms, are highly recommended.
+*   **Evolutionary Algorithms (EA)**: The `deap` library is an excellent choice for this. Given the strict time limits (180 seconds), **efficiency is paramount**.
+    *   **Parameter Tuning**: Large population sizes (`POP_SIZE`) and many generations (`NUM_GENERATIONS`) are the primary drivers of long execution times, especially when combined with `O(N^2)` fitness evaluations. For the given time limit, **start with conservative parameters** (e.g., `POP_SIZE` around 100-200, `NUM_GENERATIONS` around 500-1000). Prioritize a faster initial run, then tune iteratively. It is critical to avoid timeouts.
+    *   **Individual Representation**: An individual should encode the `(x, y, r)` for all 32 circles. A flat `numpy` array of shape `(32 * 3,)` is suitable (e.g., `[x1, y1, r1, x2, y2, r2, ..., x32, y32, r32]`). Ensure `r` values are positive.
+    *   **Fitness Function**: The primary objective is to maximize `sum_radii`. The fitness function *must* rigorously check for constraint violations (overlaps, out-of-bounds circles) and apply significant penalties to `sum_radii` for any invalid configuration. A common approach is to subtract a large penalty for each overlap or out-of-bounds condition from the sum of radii. For example, `fitness = sum_radii - C * num_overlaps - D * out_of_bounds_score`, where C and D are large positive constants. **The magnitude of these penalty coefficients (C, D) is crucial.** They must be large enough to make *any* invalid configuration worse than *any* valid configuration, but not so astronomically large that they overshadow subtle differences between valid solutions or create a search landscape too rugged for the optimizer. Consider a "soft" penalty for minor violations and a "hard" penalty for severe ones, or a penalty proportional to the *degree* of violation (e.g., `(r_i + r_j - distance)^2` for overlaps, as this provides a smoother gradient for optimization algorithms like DE/SLSQP).
+        **Crucially, the overlap detection within the fitness function must be highly optimized.** The `O(N^2)` pairwise distance checks (approx. 500 checks for N=32) will be a major bottleneck when performed millions of times across generations and individuals. **Using `scipy.spatial.distance.pdist` or similar `O(N^2)` full distance matrix computations within the core fitness loop is highly inefficient and will severely limit the number of generations or population size achievable within the time limit.** It is **imperative** to use spatial indexing structures like `R-trees` (from the `rtree` package) or `KD-Trees` (`scipy.spatial.KDTree`) to accelerate neighbor finding and significantly reduce the average case complexity of overlap checks. This is a critical performance optimization for the EA, allowing for substantially more fitness evaluations and thus better solution quality. For `R-trees`, consider inserting circle bounding boxes `(x-r, y-r, x+r, y+r)` and querying for intersections.
+    *   **Initialization**: Start with individuals where circles are placed randomly but *initially valid* (small radii, within bounds, non-overlapping). Or, initialize with very small radii (e.g., `r=1e-3`) and let the algorithm grow them.
+    *   **Operators**: Use standard EA operators like `cxBlend` for crossover and `mutGaussian` for mutation, adapted for the `(x,y,r)` structure of the individuals. Ensure mutation operations respect initial bounds for x, y, and r (e.g., clamp values).
+*   **Iterative Refinement**: After an EA finds a good candidate, consider using local optimization (e.g., `scipy.optimize.minimize` with L-BFGS-B or SLSQP) on the best individuals from the GA population. This might require approximating gradients (e.g., via finite differences in `SLSQP`) or using derivative-free methods. Be aware that for high-dimensional problems (like 96 variables for 32 circles), these local optimizers can be computationally intensive; carefully tune parameters like `maxiter` to balance speed and solution quality. This step can significantly improve the final solution quality.
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+*   **Global Optimization with Metaheuristics**:
+    *   **Evolutionary Algorithms (EA)**: As detailed above, these are robust for high-dimensional, non-convex problems with many local optima. `deap` is specifically designed for this.
+    *   **Particle Swarm Optimization (PSO)** or **Differential Evolution (DE)**: These are also effective metaheuristics that can be implemented using `scipy.optimize.differential_evolution` or a custom `deap` setup. They are good at exploring complex search spaces.
+*   **Hybrid Approaches**: Combine global search (EA) for exploration with local search (gradient-based methods like `scipy.optimize.minimize`) for exploitation. This allows the EA to find promising regions and the local optimizer to fine-tune solutions.
+*   **"Grow and Push" Heuristics**: An iterative method where circles are initialized small, grown until they touch, and then "pushed" apart to alleviate overlaps or find new configurations. This often involves simulating repulsive forces between overlapping circles and attractive forces towards the square's center or boundaries. This can be a good initialization strategy for EAs or a standalone heuristic. **If implemented as a post-processing step or within an iterative loop, the pairwise checks for overlaps are `O(N^2)` per iteration.** To avoid significant performance bottlenecks, **it is highly recommended to use spatial indexing (`R-trees` or `KD-Trees`) to efficiently accelerate neighbor finding** within this heuristic.
+*   **Force-Directed Layout**: Model circles as particles with repulsive forces when overlapping and attractive forces to the center of the square or to each other if they are "supposed" to touch. `pymunk` or `pybullet` could be adapted for this, though this adds significant complexity.
+*   **Two-Phase Optimization**:
+    1.  **Phase 1 (Placement/Topology)**: Focus on finding a good arrangement of circle centers `(x,y)` while keeping radii small or equal. This simplifies the problem temporarily.
+    2.  **Phase 2 (Radii Optimization)**: Once centers are somewhat fixed, optimize radii `r` for maximum sum, potentially using a more specialized solver for a simpler sub-problem (e.g., a linear program if centers are truly fixed).
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+*   **Contact Graph**: Optimal circle packings often feature a "contact graph" where circles touch each other and/or the boundaries. The number of contacts tends to be high in optimal solutions, as this maximizes space utilization.
+*   **Local Optima Landscape**: The objective function (sum of radii) with these non-linear constraints is highly non-convex and non-smooth, leading to a vast landscape of local optima. This strongly reinforces the need for global optimization methods capable of escaping local traps.
+*   **Symmetry**: While the problem doesn't mandate identical circles, the optimal arrangements for identical circles often exhibit hexagonal packing. For 32 circles in a square, some degree of emergent symmetry or structured arrangement might appear, especially near boundaries and corners.
+*   **Boundary Effects**: Circles tend to be pushed towards the edges and corners of the unit square to maximize their radii, as this provides "free" containment surfaces (i.e., fewer neighbors to constrain them).
+*   **Voronoi Diagrams / Delaunay Triangulations**: These computational geometry concepts can be conceptually useful for understanding empty space or potential contact points, though direct application might be overly complex for the primary optimization loop. They can inspire heuristics for placing new circles.
+*   **Density**: The theoretical maximum density for equal circles is known (hexagonal packing, approx. 0.9069). For variable radii, the concept of "maximum local density" can guide growth strategies.
+
+VALIDATION FRAMEWORK:
+The `fitness` function (for optimization) or a separate validation function should perform the following rigorous checks:
+*   **Containment Check**: For each circle `i` with `(x_i, y_i, r_i)`:
+    *   `0 <= r_i` (radii must be non-negative)
+    *   `r_i <= x_i <= 1 - r_i`
+    *   `r_i <= y_i <= 1 - r_i`
+    *   Violations should result in a penalty proportional to how far out of bounds the circle is.
+*   **Non-Overlap Check**: For every distinct pair of circles `(i, j)` with `i ≠ j`:
+    *   Calculate the squared Euclidean distance: `dist_sq = (x_i - x_j)² + (y_i - y_j)²`
+    *   Calculate the squared sum of radii: `radii_sum_sq = (r_i + r_j)²`
+    *   The condition for non-overlap is `dist_sq >= radii_sum_sq`. Comparing squared values avoids `sqrt` computation, which can be slightly faster.
+    *   Violations should result in a penalty proportional to the degree of overlap (e.g., `max(0, r_i + r_j - distance)`).
+*   **Floating-Point Tolerance**: Due to floating-point arithmetic, comparisons should use a small epsilon (e.g., `dist_sq >= radii_sum_sq - 1e-12`) to avoid spurious violations or premature termination.
+*   **Objective Function**: The sum of radii `Σr_i`. Ensure radii are clamped to be non-negative before summing for the objective, even if negative radii are penalized.
+*   **Efficient Overlap Detection**: While the `O(N^2)` pairwise distance checks (`32*31/2 = 496` checks) are manageable for a single, final evaluation, they become a **severe performance bottleneck** if performed repeatedly thousands or millions of times (e.g., within an Evolutionary Algorithm's fitness function, an iterative refinement loop, or a "grow" phase). For these critical, inner-loop scenarios, or for larger `N` (as hinted by the `Scalability` requirement), it is **imperative** to use spatial indexing structures like `R-trees` (available in the `rtree` package) or `KD-Trees` (`scipy.spatial.KDTree`) to quickly find potential overlapping pairs. This can significantly reduce the average case complexity of overlap checks by pruning distant pairs, enabling orders of magnitude more evaluations within the given time limits.
+=======
+
+# PROMPT-BLOCK-END
+    

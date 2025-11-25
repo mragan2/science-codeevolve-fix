@@ -17,8 +17,6 @@ from networkx.drawing.nx_pydot import graphviz_layout
 import matplotlib.pyplot as plt
 import numpy as np
 
-from codeevolve.database import ProgramDatabase
-
 
 def plot_experiments_statistical_summary(
     experiments: Dict[str, Dict[int, Any]],

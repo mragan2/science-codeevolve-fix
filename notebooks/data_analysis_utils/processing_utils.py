@@ -269,8 +269,7 @@ def process_experiments(
         the raw results, configuration, summary DataFrame, and estimated cost.
     """
     experiments_res = {}
-    for idx, result_path in enumerate(args["out_dirs"]):
-        result_dir = args["inpt_dir"] + f"experiments/{result_path}"
+    for idx, result_dir in enumerate(args["out_dirs"]):
 
         cfg_fname = [fname for fname in os.listdir(result_dir) if fname.endswith(".yaml")][0]
         with open(result_dir + cfg_fname, "r") as f:
@@ -316,7 +315,7 @@ def process_experiments(
 
         best_island = experiment_df["best_fitness"].idxmax()
 
-        experiments_res[result_path] = {
+        experiments_res[result_dir] = {
             "res": experiment_res,
             "config": config,
             "df": experiment_df,

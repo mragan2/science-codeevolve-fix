@@ -1,0 +1,57 @@
+SETTING:
+You are an expert in high-dimensional geometry, lattice theory, and combinatorial optimization, specializing in sphere packing and coding theory problems.
+Your task is to devise a computational strategy and generate a set of points that provides a new state-of-the-art lower bound for a specific variant of the kissing number problem in 11 dimensions.
+
+PROBLEM CONTEXT:
+Your goal is to find the largest possible set of points $S \subset \mathbb{Z}^{11}$ (points with 11 integer coordinates) that satisfies the following geometric constraint: the maximum L2 norm of any point from the origin must be less than or equal to the minimum pairwise L2 distance between any two distinct points in the set.
+
+- **Target**: Beat the AlphaEvolve benchmark of **num_points = 593**.
+- **Constraint**: For the set of points $S = \{p_1, p_2, ..., p_k\}$ where $p_i \in \mathbb{Z}^{11}$:
+  $$\max_{i} \|p_i\|_2 \le \min_{i \neq j} \|p_i - p_j\|_2$$
+- **Objective**: Maximize the cardinality of the set, $k = |S|$.
+
+PERFORMANCE METRICS:
+1.  **num_points**: The number of points in the final set $S$. **This is the primary objective to maximize.**
+2.  **benchmark_ratio**: Your `num_points` / 593. The goal is to achieve a ratio > 1.0.
+3.  **eval_time**: The total wall-clock time in seconds to generate the solution.
+
+TECHNICAL REQUIREMENTS:
+- **Determinism & Reproducibility**: Your solution must be fully reproducible. If you use any stochastic algorithms (like simulated annealing or genetic algorithms), you **must use a fixed random seed** (e.g., `numpy.random.seed(42)`).
+- **Efficiency**: While secondary to correctness and the number of points, your algorithm should be reasonably efficient. Avoid brute-force searches over the entire $\mathbb{Z}^{11}$ lattice, which is computationally infeasible.
+
+COMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:
+**Core packages**: numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn
+
+**Additional useful packages**:
+- **Optimization**: `deap` (evolutionary algorithms), `platypus` (multi-objective optimization)
+- **Geometric computing**: `shapely` (geometric operations), `rtree` (spatial indexing), `scipy.spatial` (KDTree, Voronoi)
+- **Constraint programming**: `python-constraint`, `ortools` (Google OR-Tools)
+- **Physics simulation**: `pymunk` (2D physics), `pybullet` (physics engine)
+- **Performance**: `cython`, `joblib` (parallelization), 'numba' (JIT)
+
+# PROMPT-BLOCK-START
+
+OPTIMIZATION STRATEGIES TO CONSIDER:
+- **Lattice-Based Search**: Systematically search for optimal subsets of points from known dense lattices in 11 dimensions, such as the root lattices $A_{11}$ and $D_{11}$. These provide highly structured initial candidates.
+- **Stochastic & Heuristic Methods**:
+    - **Evolutionary Algorithms**: Evolve a population of point sets. Use mutation operators (e.g., perturbing a point to a nearby integer coordinate, adding/removing a point) and crossover operators (e.g., combining subsets from two parent solutions).
+    - **Simulated Annealing**: Start with an initial configuration (e.g., from a lattice) and iteratively modify it. Define an energy function that rewards a higher point count and heavily penalizes any violation of the geometric constraint.
+    - **Greedy Constructive Algorithms**: Start with an empty set. Iteratively add the integer point that best satisfies some heuristic (e.g., has the lowest norm, or leaves the most "space" for future points) while maintaining the core constraint.
+- **Local Search & Refinement**:
+    - Begin with a high-quality initial guess (a "seed" configuration) and attempt to improve it by making small, local changes.
+    - **Tabu Search**: Prevent cycling by keeping a short-term memory of recently made moves.
+- **Hybrid Approaches**: Combine the strengths of different methods. For instance, use a lattice to generate a strong initial seed, then apply a simulated annealing or evolutionary algorithm to refine and improve upon it. This mirrors the successful strategy of AlphaEvolve.
+
+GEOMETRIC INSIGHTS & MATHEMATICAL FOUNDATIONS:
+- **Kissing Number Problem**: The standard kissing number $k(n)$ is the maximum number of non-overlapping unit spheres that can touch a central unit sphere in $n$ dimensions. Your problem is a related but distinct packing problem within a hypersphere. The current best known bounds for the standard kissing number in 11D are $595 \le k(11) \le 870$. Your target of beating 593 is for this specific integer-constrained variant.
+- **Code Design Analogy**: This problem is equivalent to finding a spherical code within the integer lattice $\mathbb{Z}^{11}$. The points of $S$ can be viewed as codewords.
+- **Constraint Tightness**: An optimal solution will likely satisfy the constraint with near-equality, i.e., $\max \|p_i\|_2 \approx \min \|p_i - p_j\|_2$. Let this common value be $d$. The problem is then to pack as many integer points as possible inside a ball of radius $d$ such that they are separated by a distance of at least $d$.
+- **Symmetry**: Exploit symmetry to reduce the search space. If a point $p$ is in the set, consider adding permutations of its coordinates or sign changes (e.g., $(-p_1, p_2, ..., p_{11})$) if they also satisfy the constraints.
+
+**Recommended implementation patterns**:
+- **Vectorization**: Use `numpy` for all vector and matrix operations to maximize speed. The core constraint check can be implemented efficiently by computing a single pairwise distance matrix.
+- **Efficient Neighbor Search**: For iterative algorithms that add or move points, use a KD-tree to check for constraint violations with nearby points only, avoiding a full $O(k^2)$ check at every step.
+- **Integer Arithmetic**: Since all points are in $\mathbb{Z}^{11}$, their squared norms and squared distances will also be integers. Working with squared distances ($d^2$) avoids costly square root operations until the final comparison. Let $N^2_{max} = \max_i \|p_i\|_2^2$ and $D^2_{min} = \min_{i \neq j} \|p_i - p_j\|_2^2$. The constraint becomes $N^2_{max} \le D^2_{min}$.
+- **Numba and NumPy Compatibility**: When using `@numba.jit(nopython=True)`, be aware that Numba can be strict about NumPy function signatures and might not always handle implicit arguments (like an `out` array) or complex array expressions as seamlessly as standard Python. For matrix-vector products, prefer explicit `np.dot(matrix, vector)` over the `@` operator if you encounter `TypingError` related to argument counts. If `np.dot` still causes issues, a more explicit loop combined with `np.dot(row, vector)` for each row, or `(matrix * vector).sum(axis=1)`, might be necessary. Always test Numba-jitted functions thoroughly for compatibility and performance.
+
+# PROMPT-BLOCK-END

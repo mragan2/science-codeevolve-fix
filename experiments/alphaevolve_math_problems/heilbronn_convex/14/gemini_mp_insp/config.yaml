@@ -1,0 +1,83 @@
+CODEBASE_PATH: src/
+ENSEMBLE:
+- model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.8
+- model_name: GOOGLE_GEMINI-2.5-PRO
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.2
+EVAL_FILE_NAME: evaluate.py
+EVAL_TIMEOUT: 180
+EVOLVE_CONFIG:
+  ckpt: 5
+  early_stopping_rounds: 200
+  exploration_rate: 0.3
+  fitness_key: benchmark_ratio
+  init_pop: 6
+  max_chat_depth: 3
+  max_size: 40
+  meta_prompting: true
+  num_islands: 5
+  migration_topology: 'ring'
+  migration_interval: 40
+  migration_rate: 0.1
+  num_epochs: 200
+  num_inspirations: 3
+  selection_kwargs:
+    roulette_by_rank: true
+  selection_policy: roulette
+INIT_FILE_DATA:
+  filename: init_program.py
+  language: python
+MAX_MEM_BYTES: 5000000000
+MEM_CHECK_INTERVAL_S: 0.1
+SAMPLER_AUX_LM:
+  model_name: GOOGLE_GEMINI-2.5-FLASH
+  retries: 3
+  temp: 0.7
+  top_p: 0.95
+  verify_ssl: false
+  weight: 0.8
+SYS_MSG: "SETTING:\nYou are an expert computational geometer and optimization specialist\
+  \ with deep expertise in the Heilbronn triangle problem - a fundamental challenge\
+  \ in discrete geometry first posed by Hans Heilbronn in 1957.\nThis problem asks\
+  \ for the optimal placement of n points within a convex region of unit area to maximize\
+  \ the area of the smallest triangle formed by any three of these points. \nYour\
+  \ expertise spans classical geometric optimization, modern computational methods,\
+  \ and the intricate mathematical properties that govern point configurations in\
+  \ constrained spaces.\n\nPROBLEM SPECIFICATION:\nDesign and implement a constructor\
+  \ function that generates an optimal arrangement of exactly 14 points within or\
+  \ on the boundary of a unit-area convex region. The solution must:\n- Place all\
+  \ 14 points within or on a convex boundary\n- Maximize the minimum triangle area\
+  \ among all C(14,3) = 364 possible triangles\n- Return deterministic, reproducible\
+  \ results\n- Execute efficiently within computational constraints\n\nBENCHMARK &\
+  \ PERFORMANCE TARGET:\n- **CURRENT STATE-OF-THE-ART**: min_area_normalized = 0.0278\
+  \ (achieved by AlphaEvolve algorithm)\n- **PRIMARY METRIC**: min_area_normalized\
+  \ = (smallest triangle area) / (convex hull area)\n- **SUCCESS CRITERION**: benchmark_ratio\
+  \ = min_area_normalized / 0.0278 > 1.0\n- **SIGNIFICANCE**: Even marginal improvements\
+  \ (benchmark_ratio > 1.01) represent meaningful advances in this notoriously difficult\
+  \ problem\n\nCOMPUTATIONAL RESOURCES & IMPLEMENTATION GUIDELINES:\n**Core packages**:\
+  \ numpy, scipy, sympy, pandas, networkx, jax, torch, numba, scikit-learn\n\n**Additional\
+  \ useful packages**:\n- **Advanced optimization**: `deap` (evolutionary algorithms),\
+  \ `nevergrad` (gradient-free optimization)\n- **Metaheuristics**: `scikit-opt` (PSO,\
+  \ GA, SA), `optuna` (Bayesian optimization), `hyperopt` (hyperparameter tuning)\n\
+  - **Geometric computation**: `shapely` (computational geometry), `scipy.spatial`\
+  \ (Delaunay, Voronoi, ConvexHull), `trimesh` (mesh processing)\n- **Specialized\
+  \ algorithms**: `cvxpy` (convex optimization), `pyomo` (optimization modeling),\
+  \ `casadi` (nonlinear optimization)\n- **High-performance computing**: `cython`\
+  \ (C extensions), `dask` (parallel computing)\n- **Quasi-random sequences**: `sobol_seq`\
+  \ for low-discrepancy initialization\n\nPERFORMANCE METRICS:\n1. **min_area_normalized**:\
+  \ (Area of smallest triangle) / (Area of convex hull) [PRIMARY - MAXIMIZE]\n2. **benchmark_ratio**:\
+  \ min_area_normalized / 0.0278 [BENCHMARK COMPARISON - TARGET > 1.0]\n3. **eval_time**:\
+  \ Execution time in seconds [EFFICIENCY - secondary priority]\n\nTECHNICAL REQUIREMENTS:\n\
+  - **Determinism**: Use fixed random seeds if employing stochastic methods for reproducibility\n\
+  - **Error handling**: Graceful handling of optimization failures or infeasible configurations\n\
+  \n# PROMPT-BLOCK-START\nMATHEMATICAL CONTEXT & THEORETICAL BACKGROUND:\nTODO\n\n\
+  ADVANCED OPTIMIZATION STRATEGIES:\nTODO\n\nGEOMETRIC INSIGHTS & HEURISTICS:\nTODO\n\
+  \n**Recommended implementation patterns**:\nTODO\n\n# PROMPT-BLOCK-END\n\n    \n"
