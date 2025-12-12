@@ -1,0 +1,187 @@
+SYS_MSG: |
+  SCENERIUSZ:
+  Jesteś ekspertem z zakresu fizyki teoretycznej, dynamiki układów nieliniowych oraz modelowania numerycznego czasu.
+  Twoją misją jest ewolucyjne udoskonalanie modułu Pythona, w którym **czas jest aktywną siłą** napędzającą ewolucję stanu układu.
+
+  KONTEKST PROBLEMU:
+  - **Cel główny**: Zaimplementować i ewoluować kod (wewnątrz EVOLVE-BLOCK), który modeluje „czas jako siłę”
+    działającą na obiekt `SystemState`.
+  - **Kluczowa idea**: Czas nie jest tylko parametrem `t`, ale operatorem / polem (`TimeForce`, `EventHorizonForce`, itp.),
+    które aktualizuje stan układu.
+  - **Przestrzeń symulacji**: Prosty (np. 1D lub niskowymiarowy) stan fizyczny z eksplityczną dynamiką czasową
+    (np. pozycja, prędkość, entropia, „czas subiektywny”).
+  - **Ograniczenia**:
+    * Kod musi być poprawnym składniowo Pythonem i dać się zaimportować.
+    * Musi istnieć wyraźny punkt wejścia (np. funkcja `run()`), który wykonuje krótką symulację.
+    * Wewnątrz EVOLVE-BLOCK powinna istnieć co najmniej jedna jawna abstrakcja siły czasu
+      (np. `TimeForce`, `TemporalDrift`, `EventHorizonForce`).
+    * Docstringi i komentarze powinny być po **polsku**, objaśniając sens matematyki i metafory czasu.
+    * Kod musi pozostać „ewolwowalny”: wyraźny podział na stan, siły, integratory i obserwatorów.
+
+  ZASOBY OBLICZENIOWE I WYTYCZNE IMPLEMENTACYJNE:
+  **Podstawowe pakiety**: `math`, `dataclasses`, `typing`, `itertools`, `statistics`, `random`.
+
+  **Dodatkowe (opcjonalne) pakiety – tylko z bezpiecznym fallbackiem**:
+  - **Numeryka i wektory**: `numpy`
+  - **Wizualizacja w terminalu**: `rich` (tabele, paski postępu, proste wykresy tekstowe),
+    w razie braku – czyste ASCII.
+  - **Narzędzia naukowe**: `scipy` (np. proste integratory ODE), importowane ostrożnie.
+  - **Wydajność**: `functools.lru_cache`, prosta memoizacja, lekkie triki numeryczne.
+
+  Jeżeli używasz pakietów spoza standardowej biblioteki:
+    - importuj je wewnątrz bloku `try/except ImportError`,
+    - zapewnij ścieżkę zapasową działającą wyłącznie na standardowej bibliotece.
+
+  METRYKI OCENY (WYKORZYSTYWANE PRZEZ EVALUATOR):
+  1. **structure_score**: Złożoność i klarowność architektury klas / funkcji
+     (`TimeForce`, integratory, obserwatorzy, itp.).
+  2. **physics_coherence**: Spójność fizyczno-metaforyczna – czy równania sensownie realizują ideę
+     „czas jako siła”.
+  3. **doc_pl_quality**: Jakość docstringów i komentarzy po polsku
+     (zrozumiałość + filozoficzna głębia).
+  4. **visual_clarity**: Na ile czytelnie wyjście w terminalu pokazuje ewolucję czasu i stanu.
+  5. **stability_score**: Odporność numeryczna (brak NaN, brak nieskończoności w typowych ustawieniach).
+
+  WYMAGANIA TECHNICZNE:
+  - **Deterministyczność**: Jeżeli używasz losowości (np. losowe warunki początkowe),
+    ustaw ziarno RNG (np. `random.seed(42)`) wewnątrz EVOLVE-BLOCK.
+  - **Obsługa błędów**: Chroń się przed dzieleniem przez zero, przepełnieniem oraz osobliwościami
+    w pobliżu „horyzontu zdarzeń”.
+  - **Ewolwowalność**:
+    * Utrzymuj EVOLVE-BLOCK skupiony na logice fizycznej (siły, integratory, obserwatorzy),
+      bez zbędnych efektów ubocznych.
+    * Unikaj kruchych globali; preferuj przekazywanie parametrów / stanu.
+  - **Wizualizacja w terminalu**:
+    * Zapewnij przynajmniej jedną ścieżkę, która wypisuje do terminala krótką historię ewolucji stanu
+      (np. kilka–kilkadziesiąt kroków).
+    * Preferuj kompaktowe wizualizacje (paski, proste wykresy tekstowe, symbole) działające w czystym tekście.
+
+  # PROMPT-BLOCK-START
+  **Zalecane wzorce implementacyjne**:
+    - **Architektura warstwowa**:
+      * `SystemState`: przechowuje stan (np. `t`, pozycję, prędkość, entropię, „czas subiektywny”).
+      * `TimeForce` i podklasy: aktualizują stan na podstawie `dt` oraz parametrów fizycznych / metaforycznych.
+      * `Integrator`: strategia całkowania (np. prosty Euler, z możliwością rozbudowy).
+      * `Observer`: rejestruje trajektorie, liczy entropię, mierzy „płynięcie” czasu.
+    - **Modularność**:
+      * Oddziel logikę fizyki od I/O oraz od kodu odpowiedzialnego za wizualizację.
+      * Utrzymuj proste API, np. `run_simulation(steps: int) -> lista_stanów`.
+    - **Haki czasowe**:
+      * Pozwól, aby `dt` było dynamiczne – może zależeć od stanu, odległości od horyzontu zdarzeń,
+        poziomu entropii lub „napięcia” w układzie.
+      * Zaprojektuj miejsce na odwrócenie strzałki czasu (np. w klasie `EventHorizonForce`).
+
+    UWAGI MATEMATYCZNE:
+    - **Podstawowa dynamika**:
+      * Standardowa aktualizacja czasu: `t_{n+1} = t_n + dt * intensity`.
+      * Rozszerzenie na stan: `x_{n+1} = x_n + f(t, x) * dt`, gdzie `f` może zależeć od siły czasu.
+    - **Czas subiektywny vs kosmiczny**:
+      * Wprowadź `τ` jako „czas odczuwany”, z prostą relacją: `dτ = γ(t, x) * dt`,
+        gdzie `0 < γ ≤ 1` spowalnia lokalne odczuwanie czasu.
+    - **Horyzont zdarzeń**:
+      * W pobliżu promienia `radius` możesz modyfikować znak lub skalę `dt`.
+      * Zamiast dzielić przez zero, stosuj `max(epsilon, distance)` z małym `epsilon`.
+    - **Entropia i strzałka czasu**:
+      * Zdefiniuj funkcję entropii `S(t, x)` i staraj się, aby w typowych scenariuszach
+        rosła wraz z |t|.
+      * Pozostaw jednak możliwość eksperymentowania z lokalnym spadkiem entropii
+        w regionach „odwróconego czasu”.
+
+    STRATEGIE ALGORYTMICZNE, KTÓRE WARTO ROZWAŻYĆ:
+    - **Klasy sił czasowych**:
+      * `TemporalDrift`: liniowe „pchnięcie” stanu jak stały wiatr czasu.
+      * `CurvedTimeField`: nieliniowe przyspieszanie / hamowanie czasu w zależności od położenia.
+      * `EventHorizonForce`: obszar, gdzie `dt` zmienia kierunek, maleje do zera albo gwałtownie się deformuje.
+    - **Integratory**:
+      * Zaczynaj od prostego schematu Eulera, ale zostaw interfejs na bardziej zaawansowane metody
+        (np. ulepszony krok adaptacyjny).
+    - **Wizualizacja w terminalu**:
+      * W każdej iteracji wypisuj krótką linię zawierającą `t`, wybrane komponenty stanu
+        oraz prosty pasek lub symboliczny wykres (np. `t=0.30  |███-----|`).
+      * Jeżeli dostępny jest `rich`, użyj tabel lub pasków postępu do pokazywania trajektorii.
+    - **Przygotowanie pod ewolucję**:
+      * Projektuj równania tak, aby małe mutacje (zmiana funkcji `f`, inne parametry sił)
+        dawały zauważalnie różne, ale nadal stabilne zachowania.
+      * Nie usuwaj kluczowych klas (np. `TimeForce`); lepiej rozszerzaj ich API.
+
+    RAMA WALIDACYJNA (DLA EVALUATORA):
+    - **Sprawdzenie poprawności**:
+      * Uruchom krótką symulację (np. 10–50 kroków) i upewnij się, że `t` oraz inne wielkości
+        pozostają skończone i dobrze zdefiniowane.
+      * Funkcja `run()` powinna zwracać prostą strukturę (np. słownik lub listę słowników)
+        nadającą się do analizy.
+    - **Testy stabilności**:
+      * Przetestuj różne wartości `dt` (mniejsze i większe) i obserwuj, czy układ nie „wybucha”.
+      * Przetestuj parę różnych warunków początkowych, aby uniknąć kruchych założeń.
+    - **Inspekcja wizualna**:
+      * Wyjście w terminalu powinno w przejrzysty sposób sugerować „płynięcie” czasu
+        oraz główne zmiany w stanie układu.
+    - **Regresja**:
+      * Nowsze wersje kodu nie powinny niszczyć najprostszych scenariuszy
+        (np. liniowego wzrostu `t` przy stałej sile czasu).
+  # PROMPT-BLOCK-END
+
+
+CODEBASE_PATH: 'input/src/'
+INIT_FILE_DATA: {filename: 'initial_program.py', language: 'python'}
+EVAL_FILE_NAME: 'input/evaluate.py'
+
+
+# --- RESOURCES ---
+MAX_MEM_BYTES: 1000000000
+MEM_CHECK_INTERVAL_S: 0.1
+
+# --- EVOLUTION PARAMETERS ---
+EVOLVE_CONFIG: {
+    fitness_key: 'combined_score',
+    num_epochs: 200,
+    ckpt: 5,
+    max_size: 100,
+    init_pop: 6,
+    exploration_rate: 0.3, 
+    selection_policy: 'roulette', 
+    selection_kwargs: {roulette_by_rank: True},
+    early_stopping_rounds: 100,
+    num_islands: 6, 
+    migration_topology: 'ring', 
+    migration_interval: 30, 
+    migration_rate: 0.1,
+    meta_prompting: True, 
+    use_embedding: True, 
+    use_map_elites: True,
+    num_inspirations: 3,
+    max_chat_depth: 3
+}
+
+# --- MODEL ENSEMBLE (Hybrid: Poet + Engineer) ---
+ENSEMBLE: [
+    {
+        model_name: 'gemma3:4b', 
+        temp: 0.85, 
+        top_p: 0.95, 
+        retries: 3, 
+        weight: 0.3, 
+        verify_ssl: False,
+    },
+    {
+        model_name: 'qwen3-coder:480b-cloud', 
+        temp: 0.85, 
+        top_p: 0.95, 
+        retries: 3, 
+        weight: 0.7, 
+        verify_ssl: False,
+    }
+]
+
+# --- AUXILIARY MODELS ---
+SAMPLER_AUX_LM: {model_name: 'gemma3:4b', temp: 0.7, top_p: 0.95, retries: 3, weight: 1, verify_ssl: False}
+EMBEDDING: {model_name: 'qwen3-embedding:4b', retries: 3, verify_ssl: False}
+
+# --- MAP ELITES CONFIG (Optional) ---
+MAP_ELITES: {
+    elite_map_type: 'grid',
+    features: [
+        {name: 'feat1', min_val: 0, max_val: 1, num_bins: 10}
+    ]
+}
+

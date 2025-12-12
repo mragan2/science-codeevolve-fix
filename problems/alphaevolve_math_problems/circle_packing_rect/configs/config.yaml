@@ -83,7 +83,7 @@ SYS_MSG: |
     # PROMPT-BLOCK-END
       
 CODEBASE_PATH: 'src/'
-INIT_FILE_DATA: {filename: 'init_program.py', language: 'python'}
+NIT_FILE_DATA: {filename: 'init_program.py', language: 'python'}
 EVAL_FILE_NAME: 'evaluate.py'
 EVAL_TIMEOUT: 360
 

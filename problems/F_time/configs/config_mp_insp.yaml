@@ -1,0 +1,101 @@
+SYS_MSG: | 
+    Jesteś Architektem Systemów Fizycznych w fazie zaawansowanej optymalizacji (Phase 2).
+    
+    STAN PROJEKTU:
+    Twoja biblioteka ewoluowała z prostej idei "czas to siła" do złożonego modelu 
+    uwzględniającego:
+      1. Relatywistykę (Time Dilation).
+      2. Horyzont Zdarzeń (Event Horizon) i odwrócenie strzałki czasu.
+      3. Subiektywne odczuwanie czasu (Wątek Boone'a i "Blur").
+
+    TWOJE ZADANIE W FAZIE 2:
+    Nie dodawaj już nowych, szalonych pomysłów. Skup się na **REFINE & ROBUSTNESS**:
+
+    # PROMPT-BLOCK-START
+    
+    1. LOGIKA MATEMATYCZNA (Dla modelu Reasoning):
+       - Sprawdź poprawność implementacji `apply()` w klasie `EventHorizonForce`.
+       - Upewnij się, że przejście przez horyzont (dist < radius) jest obsługiwane 
+         bez błędów numerycznych (np. dzielenie przez zero).
+       - Myśl krok po kroku: czy `dt` na pewno powinno być ujemne? Jak to wpływa na `velocity`?
+
+    2. ARCHITEKTURA (Dla modelu 480B):
+       - Wprowadź wzorzec **Observer** (Obserwator), aby oddzielić fizykę od rejestrowania danych.
+       - Rozważ wydzielenie logiki całkowania (Integrator) do osobnych strategii (np. Euler vs Runge-Kutta),
+         jeśli to poprawi stabilność przy osobliwościach.
+
+    3. DOKUMENTACJA:
+       - Utrzymuj wysoki poziom filozoficznych docstringów (po polsku).
+       - Wyjaśnij w komentarzach "dlaczego" matematyka działa tak, a nie inaczej.
+
+    CRITICAL INSTRUCTION:
+    Myśl krok po kroku, analizując logikę fizyczną. Upewnij się, że mechanizm odwracania czasu wewnątrz czarnej dziury jest zaimplementowany w sposób stabilny (numerycznie) i całkowicie wolny od błędów.
+
+    # PROMPT-BLOCK-END
+num_top_programs: 6
+use_template_stochasticity: true
+
+database:
+  population_size: 100
+  archive_size: 40
+  num_islands: 6
+  
+  # Zmiany dla Fazy 2 (Stabilizacja):
+  migration_interval: 30
+  migration_rate: 0.1          # Mniejsza migracja (izolujemy dobre rozwiązania)
+  elite_selection_ratio: 0.25
+  exploitation_ratio: 0.7      # 70% czasu ulepszamy to co mamy, zamiast szukać nowości
+
+evaluator:
+  timeout: 60
+  cascade_evaluation: true
+  cascade_thresholds: [0.6, 0.8]  # Podnosimy poprzeczkę! (Wymagamy wyższej jakości)
+  parallel_evaluations: 4
+  use_llm_feedback: false
+
+evolution_settings:
+  diff_based_evolution: true
+  allow_full_rewrites: false
+  max_code_length: 1000000     # Zwiększony limit, o który prosiłeś
+  # PROMPT-BLOCK-START
+  # PROMPT-BLOCK-END
+      
+CODEBASE_PATH: 'src/'
+INIT_FILE_DATA: {filename: 'INIT_PROGRAM.EXT', language: 'EXT'}
+EVAL_FILE_NAME: 'evaluate.py'
+EVAL_TIMEOUT: 180
+
+MAX_MEM_BYTES: 1000000000
+MEM_CHECK_INTERVAL_S: 0.1
+
+EVOLVE_CONFIG: {fitness_key: 'FITNESS_KEY',
+                num_epochs: 100,ckpt: 5,max_size: 40,init_pop: 6,
+                exploration_rate: 0.3, 
+                selection_policy: 'roulette', selection_kwargs: {roulette_by_rank: True},
+                early_stopping_rounds: 100,
+                num_islands: 5, migration_topology: 'ring', migration_interval: 40, migration_rate: 0.1,
+                meta_prompting: True, use_embedding: False, use_map_elites: False,
+                num_inspirations: 3,
+                max_chat_depth: 3}
+
+ENSEMBLE: [{model_name: 'qwen2.5-coder:7b', temp: 0.7, top_p: 0.95, retries: 3, weight: 0.8, verify_ssl: False},
+           {model_name: 'mistral:7b', temp: 0.7, top_p: 0.95, retries: 3, weight: 0.2, verify_ssl: False}]
+
+SAMPLER_AUX_LM: {model_name: 'qwen2.5-coder:7b', temp: 0.7, top_p: 0.95, retries: 3, weight: 1, verify_ssl: False}
+
+EMBEDDING: {model_name: 'qwen2.5-coder:7b', retries: 3, verify_ssl: False}
+
+MAP_ELITES: {elite_map_type: 'grid',
+             features: [
+              {name: 'feat1', min_val: 0, max_val: 1, num_bins: 10}
+             ]}
+
+# MAP_ELITES: {elite_map_type: 'cvt',
+#              features: [
+#               {name: 'feat1', min_val: 0, max_val: 1}
+#              ],
+#              elite_map_kwargs: {
+#               num_centroids: 50, num_init_samples: 10, max_iter: 300, tolerance: 0.0001
+#              }
+#              }
+
