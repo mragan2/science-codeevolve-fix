@@ -10,17 +10,19 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Optional, Dict
-import tempfile
-import logging
-import subprocess
-import threading
 import json
-import time
-import psutil
+import logging
 import pathlib
 import shutil
+import subprocess
 import sys
+import tempfile
+import threading
+import time
+from typing import Dict, Optional
+
+import psutil
+
 from codeevolve.database import Program
 
 # NOTE: For enhanced security in production environments, consider implementing
@@ -274,9 +276,9 @@ class Evaluator:
 
         # Optionally store stdout and warning with size limits
         if self.max_output_size is not None:
-            prog.output = stdout[:self.max_output_size] if stdout else None
+            prog.output = stdout[: self.max_output_size] if stdout else None
             # warning may be None if there were no warnings
-            prog.warning = warning[:self.max_output_size] if warning else None
+            prog.warning = warning[: self.max_output_size] if warning else None
         else:
             # By default, don't store output to avoid memory issues with large outputs
             prog.output = None

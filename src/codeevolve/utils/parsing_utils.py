@@ -11,8 +11,8 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Dict, Tuple, List, Optional
 import re
+from typing import Dict, List, Optional, Tuple
 
 
 class SearchAndReplaceError(Exception):
@@ -62,7 +62,7 @@ def _strip_markdown_fences(text: str) -> str:
         # Drop closing fence if present
         if s.rstrip().endswith("```"):
             s = s.rstrip()
-            s = s[: -3]
+            s = s[:-3]
     return s.strip()
 
 
@@ -99,7 +99,9 @@ def apply_evolve_block_replacement(
     )
 
     cleaned = _strip_markdown_fences(replacement_text)
-    extracted = extract_evolve_block_contents(cleaned, start_marker=start_marker, end_marker=end_marker)
+    extracted = extract_evolve_block_contents(
+        cleaned, start_marker=start_marker, end_marker=end_marker
+    )
     if not extracted:
         # Treat the full response as the evolve-block body.
         extracted = [cleaned]

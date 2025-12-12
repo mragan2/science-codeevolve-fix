@@ -10,10 +10,10 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Any, Dict, Tuple, Optional
 import logging
-import pickle as pkl
 import pathlib
+import pickle as pkl
+from typing import Any, Dict, Optional, Tuple
 
 from codeevolve.database import ProgramDatabase
 

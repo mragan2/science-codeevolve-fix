@@ -10,34 +10,35 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Any, Dict, List, Tuple, Optional
-
 import argparse
 import asyncio
+import ctypes
 import multiprocessing as mp
 import multiprocessing.sharedctypes as mpsct
 import multiprocessing.synchronize as mps
-import ctypes
 import os
-from pathlib import Path
 import re
 import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
 import yaml
 
+from codeevolve.evolution import codeevolve
 from codeevolve.islands import (
-    PipeEdge,
-    IslandData,
-    GlobalData,
     GlobalBestProg,
+    GlobalData,
+    IslandData,
+    PipeEdge,
     get_edge_list,
     get_pipe_graph,
 )
-from codeevolve.evolution import codeevolve
 from codeevolve.utils.logging_utils import cli_logger
 
 
-def async_run_evolve(run_args: Dict[str, Any], isl_data: IslandData, global_data: GlobalData) -> None:
+def async_run_evolve(
+    run_args: Dict[str, Any], isl_data: IslandData, global_data: GlobalData
+) -> None:
     asyncio.run(codeevolve(run_args, isl_data, global_data))
 
 
@@ -237,7 +238,9 @@ def main():
             out_neigh=out_adj[island_id] if out_adj else None,
         )
 
-        process = mp.Process(target=async_run_evolve, args=(isl2args[island_id], isl_data, global_data))
+        process = mp.Process(
+            target=async_run_evolve, args=(isl2args[island_id], isl_data, global_data)
+        )
         processes.append(process)
         process.start()
 
@@ -246,7 +249,9 @@ def main():
 
     # If any island process crashed, surface that as a non-zero exit.
     # Otherwise the CLI can incorrectly report success even though nothing ran.
-    bad_exitcodes = [(i, p.exitcode) for i, p in enumerate(processes) if p.exitcode not in (0, None)]
+    bad_exitcodes = [
+        (i, p.exitcode) for i, p in enumerate(processes) if p.exitcode not in (0, None)
+    ]
     if bad_exitcodes:
         for idx, code in bad_exitcodes:
             print(f"Island process {idx} exited with code {code}.")

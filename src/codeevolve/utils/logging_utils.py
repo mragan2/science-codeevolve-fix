@@ -10,20 +10,16 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Any, Dict, Optional
-
 import logging
 import multiprocessing as mp
-import time
-from collections import deque
-import re
 import os
 import pathlib
+import re
+import time
+from collections import deque
+from typing import Any, Dict, Optional
 
 from codeevolve.islands import GlobalData
-
-from typing import Optional
-import logging
 
 
 class SizeLimitedFormatter(logging.Formatter):

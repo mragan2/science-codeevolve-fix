@@ -10,20 +10,20 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Dict, List, Tuple, Optional
-from collections import deque
 import logging
+from collections import deque
+from typing import Dict, List, Optional, Tuple
 
-from codeevolve.lm import OpenAILM
 from codeevolve.database import Program, ProgramDatabase
+from codeevolve.lm import OpenAILM
 from codeevolve.prompt.template import (
-    PROG_TEMPLATE,
     EVOLVE_PROG_TASK_TEMPLATE,
+    EVOLVE_PROG_TEMPLATE,
     EVOLVE_PROG_WINSP_TASK_TEMPLATE,
     EVOLVE_PROMPT_TASK_TEMPLATE,
     EVOLVE_PROMPT_TEMPLATE,
-    EVOLVE_PROG_TEMPLATE,
     INSP_PROG_TEMPLATE,
+    PROG_TEMPLATE,
 )
 
 

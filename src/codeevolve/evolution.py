@@ -10,28 +10,27 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Any, Dict, List, Optional
-from uuid import uuid4
 import logging
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+from uuid import uuid4
 
-import yaml
 import numpy as np
+import yaml
 
-from codeevolve.database import Program, ProgramDatabase, EliteFeature
-from codeevolve.lm import OpenAILM, LMEnsemble, OpenAIEmbedding
+from codeevolve.database import EliteFeature, Program, ProgramDatabase
 from codeevolve.evaluator import Evaluator
-from codeevolve.prompt.sampler import PromptSampler, format_prog_msg
 from codeevolve.islands import (
-    IslandData,
     GlobalData,
-    sync_migrate,
+    IslandData,
     early_stopping_check,
+    sync_migrate,
 )
-
-from codeevolve.utils.parsing_utils import apply_diff_with_fallback
+from codeevolve.lm import LMEnsemble, OpenAIEmbedding, OpenAILM
+from codeevolve.prompt.sampler import PromptSampler, format_prog_msg
+from codeevolve.utils.ckpt_utils import load_ckpt, save_ckpt
 from codeevolve.utils.logging_utils import get_logger
-from codeevolve.utils.ckpt_utils import save_ckpt, load_ckpt
+from codeevolve.utils.parsing_utils import apply_diff_with_fallback
 
 MAX_LOG_MSG_SZ: int = 256
 

@@ -10,17 +10,16 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
-from typing import Dict, List, Optional, Callable, Tuple
-
-from dataclasses import dataclass, field
-from abc import ABC, abstractmethod
 import bisect
-import random
 import math
+import random
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 
-from codeevolve.utils.cvt_utils import cvt, closest_centroid_idx
+from codeevolve.utils.cvt_utils import closest_centroid_idx, cvt
 
 
 @dataclass
@@ -375,7 +374,7 @@ class ProgramDatabase:
 
         This method rebuilds the program cache, sorts programs by fitness,
         updates rank mappings, and identifies best and worst programs.
-        
+
         Note: This is used for full rebuilds (e.g., after migrations). For single
         insertions, use _incremental_update_cache() for better O(log N) performance.
         """
@@ -416,13 +415,13 @@ class ProgramDatabase:
         # The key function extracts fitness values for comparison, avoiding temporary list creation
         neg_fitness = -prog.fitness
         insertion_point = bisect.bisect_right(
-            self._sorted_pids, (neg_fitness, ''), key=lambda x: x[0]
+            self._sorted_pids, (neg_fitness, ""), key=lambda x: x[0]
         )
         self._sorted_pids.insert(insertion_point, (neg_fitness, prog.id))
-        
+
         # Update pool cache
         self._pids_pool_cache.insert(insertion_point, prog.id)
-        
+
         # Update ranks for affected programs (only those at or after insertion point)
         for i in range(insertion_point, len(self._sorted_pids)):
             _, pid = self._sorted_pids[i]
