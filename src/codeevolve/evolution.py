@@ -159,7 +159,8 @@ async def evolve_loop(
             meta_prompt_success: bool = False
             ## GENERATE DIFF
             try:
-                # TODO: maybe move the logger from inside the sampler class to here
+                # Note: Logging is handled inside the sampler's meta_prompt method as it's
+                # directly related to the LLM operation and provides better context
                 prompt_diff, prompt_tok, compl_tok = await prompt_sampler.meta_prompt(
                     prompt=parent_prompt, prog=parent_sol
                 )
@@ -249,7 +250,8 @@ async def evolve_loop(
 
         ## GENERATE DIFF
         try:
-            # TODO: maybe move the logger from inside the ensemble class to here
+            # Note: Logging is handled inside the ensemble's generate method as it's
+            # directly related to the LLM operation and provides better context
             model_id, sol_diff, prompt_tok, compl_tok = await ensemble.generate(messages=messages)
             evolve_success = True
 

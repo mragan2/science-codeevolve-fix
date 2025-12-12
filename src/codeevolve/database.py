@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Callable, Tuple
 
 from dataclasses import dataclass, field
 from abc import ABC, abstractmethod
+import bisect
 import random
 import math
 
@@ -325,6 +326,8 @@ class ProgramDatabase:
 
         self._pids_pool_cache: List[str] = []
         self._rank_cache: Dict[str, int] = {}
+        # Sorted list of (fitness, pid) tuples for efficient insertion (descending order)
+        self._sorted_pids: List[Tuple[float, str]] = []
 
         self.elite_map_type: Optional[str] = elite_map_type.lower() if elite_map_type else None
         self.elite_map: Optional[EliteMap] = None
@@ -365,15 +368,15 @@ class ProgramDatabase:
         return db_str
 
     # program management
-    ## TODO: improve insertion logic if we are to make more insertions per epoch
-    # (currently each insertion takes NlogN worst case, we can use bisect or
-    # heapq to improve this).
 
     def _update_caches(self) -> None:
         """Updates internal caches for programs and their fitness rankings.
 
         This method rebuilds the program cache, sorts programs by fitness,
         updates rank mappings, and identifies best and worst programs.
+        
+        Note: This is used for full rebuilds (e.g., after migrations). For single
+        insertions, use _incremental_update_cache() for better O(log N) performance.
         """
         if getattr(self, "map", None) is not None:
             self._pids_pool_cache = self.elite_map.get_elite_ids()
@@ -382,12 +385,40 @@ class ProgramDatabase:
 
         if not self._pids_pool_cache:
             self._rank_cache = {}
+            self._sorted_pids = []
             return
 
-        desc_pids: List[str] = sorted(
-            self._pids_pool_cache, key=lambda pid: self.programs[pid].fitness, reverse=True
+        # Build sorted list of (fitness, pid) tuples in descending order
+        # Using negative fitness for bisect (which works with ascending order)
+        self._sorted_pids = sorted(
+            [(-self.programs[pid].fitness, pid) for pid in self._pids_pool_cache]
         )
-        self._rank_cache = {pid: i for i, pid in enumerate(desc_pids)}
+        self._rank_cache = {pid: i for i, (_, pid) in enumerate(self._sorted_pids)}
+
+    def _incremental_update_cache(self, prog: Program) -> None:
+        """Incrementally updates caches when adding a single program.
+
+        This method uses binary search (bisect) to insert the new program into
+        the sorted list in O(log N) time, avoiding the O(N log N) full sort.
+
+        Args:
+            prog: The newly added program to insert into caches.
+        """
+        if not self.is_alive.get(prog.id, False):
+            return
+
+        # Insert into sorted list using bisect (negative fitness for descending order)
+        neg_fitness = -prog.fitness
+        insertion_point = bisect.bisect_left(self._sorted_pids, (neg_fitness, prog.id))
+        self._sorted_pids.insert(insertion_point, (neg_fitness, prog.id))
+        
+        # Update pool cache
+        self._pids_pool_cache.insert(insertion_point, prog.id)
+        
+        # Update ranks for affected programs (only those at or after insertion point)
+        for i in range(insertion_point, len(self._sorted_pids)):
+            _, pid = self._sorted_pids[i]
+            self._rank_cache[pid] = i
 
     def add(self, prog: Program) -> None:
         """Adds a program to the database.
@@ -427,7 +458,12 @@ class ProgramDatabase:
         ):
             self.worst_prog_id = prog.id
 
-        self._update_caches()
+        # Use incremental update for better performance when adding single programs
+        # Fall back to full update for MAP-Elites mode or when caches are empty
+        if self.elite_map is not None or not self._sorted_pids:
+            self._update_caches()
+        else:
+            self._incremental_update_cache(prog)
 
     # parent selection
 

@@ -23,7 +23,13 @@ import shutil
 import sys
 from codeevolve.database import Program
 
-# TODO: better sandboxing (e.g. firejail)
+# NOTE: For enhanced security in production environments, consider implementing
+# additional sandboxing mechanisms such as:
+# - Firejail: Linux namespace-based sandboxing tool
+# - Docker containers: Isolated containerized execution
+# - systemd-nspawn: Lightweight container manager
+# - seccomp: Linux system call filtering
+# Current implementation uses subprocess isolation with resource limits (memory, time)
 
 
 def mem_monitor(
@@ -76,6 +82,7 @@ class Evaluator:
         max_mem_b: Optional[int],
         mem_check_interval_s: Optional[float],
         logger: Optional[logging.Logger] = None,
+        max_output_size: Optional[int] = None,
     ):
         """Initializes the evaluator with execution parameters and resource limits.
 
@@ -87,12 +94,16 @@ class Evaluator:
             max_mem_b: Maximum memory usage in bytes. If None, no memory limit is enforced.
             mem_check_interval_s: Interval for memory usage checks in seconds.
             logger: Logger instance for logging evaluation activities.
+            max_output_size: Maximum size in characters for stdout/stderr storage.
+                If None, output is not stored in the Program object (default behavior).
+                If set, output will be truncated to this size.
         """
         self.eval_path: pathlib.Path | str = eval_path
         self.cwd: Optional[pathlib.Path | str] = cwd
         self.timeout_s: int = timeout_s
         self.max_mem_b: Optional[int] = max_mem_b
         self.mem_check_interval_s: Optional[float] = mem_check_interval_s
+        self.max_output_size: Optional[int] = max_output_size
         self.language2extension = {
             "python": ".py",
             "javascript": ".js",
@@ -261,6 +272,11 @@ class Evaluator:
         prog.error = error
         prog.eval_metrics = eval_metrics
 
-        # TODO: figure a good way of using stdout and warning, they might be really big
-        # prog.output = stdout
-        # prog.warning = warning
+        # Optionally store stdout and warning with size limits
+        if self.max_output_size is not None:
+            prog.output = stdout[:self.max_output_size] if stdout else None
+            prog.warning = warning[:self.max_output_size] if warning else None
+        else:
+            # By default, don't store output to avoid memory issues with large outputs
+            prog.output = None
+            prog.warning = None

@@ -252,7 +252,15 @@ def get_pipe_graph(
 
 
 # migration
-## TODO: async migration without barriers
+# NOTE: Future enhancement - Asynchronous Migration
+# Current implementation uses synchronization barriers for migration, which ensures
+# consistency but may cause islands to wait for slower ones. Consider implementing:
+# - Asynchronous migration without barriers using message queues
+# - Lock-free data structures for concurrent access
+# - Event-driven migration triggers based on population diversity
+# - Adaptive migration intervals per island based on convergence rate
+# This would improve throughput by allowing faster islands to continue evolution
+# while slower islands catch up, at the cost of increased complexity
 
 
 def send_migrants(

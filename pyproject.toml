@@ -7,7 +7,7 @@ name = "codeevolve"
 dynamic = ["version"]
 description = "Source code for CodeEvolve."
 readme = "README.md"
-requires-python = ">=3.13.5"
+requires-python = ">=3.10"
 license = "Apache-2.0"
 authors = [
     {name = "Inter Science"}

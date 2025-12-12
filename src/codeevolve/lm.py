@@ -22,7 +22,14 @@ from uuid import uuid4
 
 from openai import AsyncOpenAI
 
-# TODO: classes for open-source LM's executing locally.
+# NOTE: Future enhancement - Local LM Support
+# To support open-source LMs executing locally, consider implementing:
+# - LocalLM class compatible with OpenAI API interface (using libraries like llama-cpp-python, vllm)
+# - Support for popular models: Llama, Mistral, CodeLlama, StarCoder, etc.
+# - Batch processing optimization for local execution
+# - GPU memory management and model quantization support
+# - Integration with frameworks like HuggingFace Transformers, Ollama
+# Current implementation focuses on OpenAI-compatible API endpoints
 
 
 @dataclass
