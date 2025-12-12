@@ -307,8 +307,8 @@ def recv_migrants(
                     migrant: Program = edge.v_conn.recv()
                     in_migrants.append(migrant)
                     logger.info(f"[RECV THREAD] Received {migrant} from {edge.u}.")
-                except:
-                    logger.error(f"[RECV THREAD] Unable to receive migrant from {edge.u}.")
+                except Exception as e:
+                    logger.error(f"[RECV THREAD] Unable to receive migrant from {edge.u}: {e}")
         logger.info("[RECV THREAD] Received migrants.")
 
 

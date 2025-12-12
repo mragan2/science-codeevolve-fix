@@ -524,7 +524,8 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
         "exploration": [],
     }
 
-    config: Dict[Any, Any] = yaml.safe_load(open(args["cfg_path"], "r"))
+    with open(args["cfg_path"], "r") as f:
+        config: Dict[Any, Any] = yaml.safe_load(f)
     evolve_config = config["EVOLVE_CONFIG"]
 
     ensemble: LMEnsemble = LMEnsemble(

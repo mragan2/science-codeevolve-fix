@@ -58,7 +58,8 @@ def mem_monitor(
                 mem_exceeded_flag.set()
                 return
             time.sleep(mem_check_interval_s)
-    except:
+    except Exception:
+        # Process may have terminated, exit monitoring gracefully
         return
 
 
@@ -172,7 +173,8 @@ class Evaluator:
                 if temp_cwd_dir:
                     try:
                         temp_cwd_dir.cleanup()
-                    except:
+                    except Exception:
+                        # Cleanup may fail if directory is in use
                         pass
                     temp_cwd_dir = None
 
@@ -247,12 +249,14 @@ class Evaluator:
         finally:
             try:
                 tmp_dir.cleanup()
-            except:
+            except Exception:
+                # Cleanup may fail if directory is in use
                 pass
             if temp_cwd_dir:
                 try:
                     temp_cwd_dir.cleanup()
-                except:
+                except Exception:
+                    # Cleanup may fail if directory is in use
                     pass
 
         if not error:

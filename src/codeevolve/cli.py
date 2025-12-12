@@ -171,10 +171,13 @@ def main():
 
     try:
         if os.path.exists(cfg_copy_path) and args["load_ckpt"]:
-            config: Dict[Any, Any] = yaml.safe_load(open(cfg_copy_path, "r"))
+            with open(cfg_copy_path, "r") as f:
+                config: Dict[Any, Any] = yaml.safe_load(f)
         else:
-            config: Dict[Any, Any] = yaml.safe_load(open(args["cfg_path"], "r"))
-            yaml.safe_dump(config, open(cfg_copy_path, "w"))
+            with open(args["cfg_path"], "r") as f:
+                config: Dict[Any, Any] = yaml.safe_load(f)
+            with open(cfg_copy_path, "w") as f:
+                yaml.safe_dump(config, f)
     except Exception as err:
         print(str(err))
         sys.exit(1)

@@ -166,7 +166,12 @@ class LMEnsemble:
 
         self.weights: List[float] = [model.weight for model in self.models]
         total = sum(self.weights)
-        self.weights = [weight / total for weight in self.weights]
+        # Avoid division by zero if all weights are 0
+        if total > 0:
+            self.weights = [weight / total for weight in self.weights]
+        else:
+            # Fallback to uniform weights if all are 0
+            self.weights = [1.0 / len(self.weights) for _ in self.weights]
 
         self.random_state: random.Random = random.Random()
         self.seed: Optional[int] = seed
