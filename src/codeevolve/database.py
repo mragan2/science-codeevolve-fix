@@ -326,7 +326,8 @@ class ProgramDatabase:
 
         self._pids_pool_cache: List[str] = []
         self._rank_cache: Dict[str, int] = {}
-        # Sorted list of (fitness, pid) tuples for efficient insertion (descending order)
+        # Sorted list of (-fitness, pid) tuples for efficient insertion
+        # Using negative fitness to achieve descending order with bisect (which works on ascending lists)
         self._sorted_pids: List[Tuple[float, str]] = []
 
         self.elite_map_type: Optional[str] = elite_map_type.lower() if elite_map_type else None
@@ -401,6 +402,9 @@ class ProgramDatabase:
         This method uses binary search (bisect) to insert the new program into
         the sorted list in O(log N) time, avoiding the O(N log N) full sort.
 
+        Note: This uses bisect_right with a key function (requires Python 3.10+),
+        which is consistent with the project's minimum Python version requirement.
+
         Args:
             prog: The newly added program to insert into caches.
         """
@@ -409,7 +413,7 @@ class ProgramDatabase:
 
         # Insert into sorted list using bisect (negative fitness for descending order)
         # Use bisect_right to maintain stable ordering (newer programs with same fitness go after older ones)
-        # Using a key function with a dummy tuple to avoid creating temporary lists
+        # The key function extracts fitness values for comparison, avoiding temporary list creation
         neg_fitness = -prog.fitness
         insertion_point = bisect.bisect_right(
             self._sorted_pids, (neg_fitness, ''), key=lambda x: x[0]
