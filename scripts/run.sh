@@ -37,6 +37,8 @@ CONFIG_PATH=""
 REQUESTED_CONFIG=${2:-${CONFIG_CHOICE:-}}
 RUN_NAME="${RUN_NAME:-}" # optional env override for output folder naming
 
+declare -A API_KEYS
+
 DEFAULT_RUN_NAME=$(date +"%Y%m%d_%H%M%S")
 if [[ -z "$RUN_NAME" ]]; then
     read -r -p "Run name under experiments/${PROBLEM_NAME} [${DEFAULT_RUN_NAME}]: " RUN_NAME
@@ -45,6 +47,23 @@ fi
 OUTPUT_DIR="${REPO_ROOT}/experiments/${PROBLEM_NAME}/${RUN_NAME}"
 LOAD_CKPT="${LOAD_CKPT:--1}"
 CPU_LIST="${CPU_LIST:-}"
+
+echo "\nOptional: set API keys for this run (stored only in memory)."
+while true; do
+    read -r -p "API key env var name (e.g., OPENAI_API_KEY) [skip]: " API_KEY_NAME
+    API_KEY_NAME=${API_KEY_NAME:-}
+    if [[ -z "$API_KEY_NAME" ]]; then
+        break
+    fi
+    read -sr -p "Value for $API_KEY_NAME: " API_KEY_VALUE
+    echo
+    if [[ -z "$API_KEY_VALUE" ]]; then
+        echo "Skipped empty value for $API_KEY_NAME"
+        continue
+    fi
+    API_KEYS["$API_KEY_NAME"]="$API_KEY_VALUE"
+    export "$API_KEY_NAME"="$API_KEY_VALUE"
+done
 
 if [[ ! -d "$INPUT_DIR" ]]; then
     echo "✖ Input directory not found: $INPUT_DIR" >&2
@@ -157,9 +176,21 @@ cmd=(
 
 echo "\nTip: conda activate codeevolve  # ensure the environment is ready"
 
+set +e
 if [[ -n "$CPU_LIST" ]]; then
     echo "Pinning to CPUs: $CPU_LIST"
-    exec taskset --cpu-list "$CPU_LIST" "${cmd[@]}"
+    taskset --cpu-list "$CPU_LIST" "${cmd[@]}"
 else
-    exec "${cmd[@]}"
+    "${cmd[@]}"
 fi
+status=$?
+set -e
+
+if ((${#API_KEYS[@]} > 0)); then
+    echo "Cleaning up API key variables..."
+    for key in "${!API_KEYS[@]}"; do
+        unset "$key"
+    done
+fi
+
+exit $status

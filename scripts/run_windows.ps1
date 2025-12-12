@@ -40,6 +40,26 @@ if (-not $RunName) {
     if (-not $RunName) { $RunName = $DefaultRunName }
 }
 $OutputDir = Join-Path $RepoRoot (Join-Path "experiments" (Join-Path $ProblemName $RunName))
+$ApiKeys = @{}
+
+Write-Host "`nOptional: set API key env vars for this run (stored only in memory)."
+while ($true) {
+    $ApiKeyName = Read-Host "API key env var name (e.g., OPENAI_API_KEY) [press ENTER to skip]"
+    if (-not $ApiKeyName) { break }
+    $SecureValue = Read-Host "Value for $ApiKeyName" -AsSecureString
+    $Ptr = [System.Runtime.InteropServices.Marshal]::SecureStringToGlobalAllocUnicode($SecureValue)
+    try {
+        $PlainValue = [System.Runtime.InteropServices.Marshal]::PtrToStringUni($Ptr)
+    } finally {
+        [System.Runtime.InteropServices.Marshal]::ZeroFreeGlobalAllocUnicode($Ptr)
+    }
+    if (-not $PlainValue) {
+        Write-Host "Skipped empty value for $ApiKeyName"
+        continue
+    }
+    $env:$ApiKeyName = $PlainValue
+    $ApiKeys[$ApiKeyName] = $true
+}
 
 if (-not (Test-Path $InputDir)) {
     Write-Error "Input directory not found: $InputDir"
@@ -151,4 +171,14 @@ if ($CpuList -ne "") {
     Write-Warning "CPU pinning is not set on Windows by default; set $env:OMP_NUM_THREADS or similar if needed."
 }
 
-& $command[0] $command[1..($command.Length-1)]
+$process = & $command[0] $command[1..($command.Length-1)]
+$status = $LASTEXITCODE
+
+if ($ApiKeys.Keys.Count -gt 0) {
+    Write-Host "Cleaning up API key variables..."
+    foreach ($key in $ApiKeys.Keys) {
+        Remove-Item "Env:$key" -ErrorAction SilentlyContinue
+    }
+}
+
+exit $status
