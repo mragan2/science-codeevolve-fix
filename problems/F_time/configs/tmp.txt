@@ -122,7 +122,6 @@ EVOLVE_CONFIG: {
     use_map_elites: True,
     num_inspirations: 3,
     max_chat_depth: 3
-    max_chat_depth: 3
 }
 
 # --- MODEL ENSEMBLE (Hybrid: Poet + Engineer) ---

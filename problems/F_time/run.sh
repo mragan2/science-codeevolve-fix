@@ -49,8 +49,8 @@ CPU_LIST=""
 # Option 2: Use environment variables (RECOMMENDED)
 # Leave commented out to use existing environment variables
 # Or set them here to override:
-# export API_KEY="${API_KEY:1e28fb7fb3b5486e88cf34c33127ef71.hpbxvrNGSUlgNGFz6Mgp7q0Z}"
-# export API_BASE="${API_BASE:http://localhost:11434/v1}"
+# export API_KEY="your-api-key-here"
+# export API_BASE="your-api-base-url-here"
 
 # Option 3: Load from external file (MOST SECURE)
 # Create a file with: export API_KEY="..." and export API_BASE="..."

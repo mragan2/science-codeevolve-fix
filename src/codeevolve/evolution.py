@@ -189,7 +189,7 @@ async def evolve_loop(
                     logger.info("Attempting to SEARCH/REPLACE...")
                     child_prompt_txt: str = apply_diff_with_fallback(
                         parent_code=parent_prompt.code,
-                        diff=prompt_diff,
+                        diff_or_text=prompt_diff,
                         start_marker=mp_start_marker,
                         end_marker=mp_end_marker,
                     )
