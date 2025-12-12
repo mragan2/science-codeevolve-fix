@@ -169,9 +169,12 @@ class LMEnsemble:
         # Avoid division by zero if all weights are 0
         if total > 0:
             self.weights = [weight / total for weight in self.weights]
-        else:
+        elif len(self.weights) > 0:
             # Fallback to uniform weights if all are 0
             self.weights = [1.0 / len(self.weights) for _ in self.weights]
+        else:
+            # Empty weights list - should not happen in normal usage
+            raise ValueError("LMEnsemble requires at least one model")
 
         self.random_state: random.Random = random.Random()
         self.seed: Optional[int] = seed
