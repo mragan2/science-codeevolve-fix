@@ -57,7 +57,7 @@ while ($true) {
         Write-Host "Skipped empty value for $ApiKeyName"
         continue
     }
-    $env:$ApiKeyName = $PlainValue
+    [System.Environment]::SetEnvironmentVariable($ApiKeyName, $PlainValue, "Process")
     $ApiKeys[$ApiKeyName] = $true
 }
 
@@ -92,7 +92,7 @@ function Set-ConfigFromChoice {
 }
 
 if ($AvailableConfigs.Count -gt 0) {
-    Write-Host "Available configs in $ConfigDir:"
+    Write-Host "Available configs in ${ConfigDir}:"
     for ($i = 0; $i -lt $AvailableConfigs.Count; $i++) {
         $slot = $i + 1
         Write-Host "  [$slot] $($AvailableConfigs[$i])"
@@ -177,7 +177,7 @@ $status = $LASTEXITCODE
 if ($ApiKeys.Keys.Count -gt 0) {
     Write-Host "Cleaning up API key variables..."
     foreach ($key in $ApiKeys.Keys) {
-        Remove-Item "Env:$key" -ErrorAction SilentlyContinue
+        [System.Environment]::SetEnvironmentVariable($key, $null, "Process")
     }
 }
 
