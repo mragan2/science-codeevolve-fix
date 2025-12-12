@@ -275,6 +275,7 @@ class Evaluator:
         # Optionally store stdout and warning with size limits
         if self.max_output_size is not None:
             prog.output = stdout[:self.max_output_size] if stdout else None
+            # warning may be None if there were no warnings
             prog.warning = warning[:self.max_output_size] if warning else None
         else:
             # By default, don't store output to avoid memory issues with large outputs
