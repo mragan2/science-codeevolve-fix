@@ -104,6 +104,9 @@ def load_config(path: Path) -> Dict[str, Any]:
     """Load YAML or JSON config into a dictionary."""
 
     text = path.read_text(encoding="utf-8")
+    if not text.strip():
+        return {}
+
     if path.suffix.lower() in {".yml", ".yaml"}:
         return yaml.safe_load(text) or {}
     return json.loads(text)
