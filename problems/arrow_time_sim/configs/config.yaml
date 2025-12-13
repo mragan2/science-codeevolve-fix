@@ -1,0 +1,98 @@
+# --- WIADOMOŚĆ SYSTEMOWA (SYSTEM PROMPT) ---
+SYS_MSG: |
+  USTAWIENIE:
+    Ewoluujesz zabawkowy symulator „Strzałki Czasu”.
+    Czas jest traktowany jako aktywny operator, a nie tylko parametr.
+
+   # PROMPT-BLOCK-START 
+  CEL:
+    Maksymalizuj fitness_key = combined_score zwracany przez evaluator.
+
+  TWARDY WARUNEK:
+    - Wolno modyfikować tylko kod pomiędzy:
+        # EVOLVE-BLOCK-START
+        # EVOLVE-BLOCK-END
+    - Kod ma być szybki i stabilny numerycznie (bez NaN/Inf).
+
+  CO JEST „DOBRE” (jak to jest punktowane):
+    - t powinno w większości rosnąć (mało/brak ujemnych Δt),
+    - entropia S powinna w większości nie maleć na krokach, gdzie Δt > 0,
+    - wartości powinny pozostać skończone i ograniczone (bez eksplozji),
+    - deterministyczność dla tego samego seeda jest mile widziana.
+  # PROMPT-BLOCK-END
+
+# --- WYMAGANE ŚCIEŻKI / IO ---
+CODEBASE_PATH: "input/src/"
+INIT_FILE_DATA: { filename: "initial_program.py", language: "python" }
+EVAL_FILE_NAME: "input/evaluate.py"
+EVAL_TIMEOUT: 20
+
+# --- ZASOBY ---
+# Zostawiamy Twoją sekcję RESOURCES, ale dodatkowo dublujemy pola na top-level
+# (część runnerów czyta tylko top-level).
+RESOURCES:
+  MAX_MEM_BYTES: 1000000000
+  MEM_CHECK_INTERVAL_S: 0.1
+
+MAX_MEM_BYTES: 1000000000
+MEM_CHECK_INTERVAL_S: 0.1
+
+# --- PARAMETRY EWOLUCJI ---
+EVOLVE_CONFIG:
+  fitness_key: combined_score
+  num_epochs: 50
+  ckpt: 10
+  max_size: 100
+  init_pop: 6
+  exploration_rate: 0.3
+  selection_policy: roulette
+  selection_kwargs:
+    roulette_by_rank: true
+  early_stopping_rounds: 100
+  num_islands: 4
+  migration_topology: ring
+  migration_interval: 30
+  migration_rate: 0.1
+  meta_prompting: true
+  use_embedding: true
+  use_map_elites: true
+  num_inspirations: 3
+  max_chat_depth: 3
+
+# --- ENSEMBLE MODELI (Hybryda: „Poeta + Inżynier”) ---
+ENSEMBLE:
+  - model_name: "rnj-1:8b-cloud"
+    temp: 0.85
+    top_p: 0.95
+    retries: 3
+    weight: 0.8
+    verify_ssl: false
+  - model_name: "codegemma:2b-code-q4_K_M"
+    temp: 0.85
+    top_p: 0.95
+    retries: 3
+    weight: 0.2
+    verify_ssl: false
+
+# --- MODELE POMOCNICZE ---
+SAMPLER_AUX_LM:
+  model_name: "deepseek-r1:1.5b"
+  temp: 0.7
+  top_p: 0.95
+  retries: 3
+  weight: 1
+  verify_ssl: false
+
+EMBEDDING:
+  model_name: "nomic-embed-text-v2-moe"
+  retries: 3
+  verify_ssl: false
+
+# --- MAP-ELITES (opcjonalne) ---
+MAP_ELITES:
+  elite_map_type: "grid"
+  features:
+    - name: "feat1"
+      min_val: 0
+      max_val: 1
+      num_bins: 10
