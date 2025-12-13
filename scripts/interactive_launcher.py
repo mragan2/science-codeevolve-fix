@@ -247,7 +247,7 @@ def edit_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def build_config_payload(
-    input_dir: Path, evaluator_path: Path, base_config: Dict[str, Any] | None, allow_edit: bool
+    input_dir: Path, evaluator_path: Path, base_config: Dict[str, Any] | None, allow_edit: bool, allow_overrides: bool
 ) -> Dict[str, Any]:
     """Combine input directory and evaluator paths with existing or new configuration content.
     
@@ -267,8 +267,10 @@ def build_config_payload(
     else:
         print("Skipping per-parameter edits; you can adjust later by editing the saved file.")
 
-    extra_overrides = prompt_overrides() if yes_no("Add quick overrides on top?", default=False) else {}
-    config_data.update(extra_overrides)
+    if allow_overrides:
+        extra_overrides = prompt_overrides()
+        config_data.update(extra_overrides)
+    
     return config_data
 
 
@@ -427,13 +429,19 @@ def main() -> None:
     
     # Ask about editing parameters
     allow_edit = yes_no("Would you like to review/edit parameters?", default=False)
+    allow_overrides = yes_no("Add quick overrides on top?", default=False) if not allow_edit else False
     
-    # Build config
-    config_payload = build_config_payload(input_dir, evaluator_path, base_config, allow_edit)
-    
-    # Save config
-    save_config(config_payload, config_path)
-    print(f"\n💾 Saved config to: {config_path.relative_to(repo_root)}")
+    # Only build/save config if we're creating new or explicitly editing
+    if not use_existing_config or allow_edit or allow_overrides:
+        # Build config with modifications
+        config_payload = build_config_payload(input_dir, evaluator_path, base_config, allow_edit, allow_overrides)
+        
+        # Save config
+        save_config(config_payload, config_path)
+        print(f"\n💾 Saved config to: {config_path.relative_to(repo_root)}")
+    else:
+        # Using existing config without modifications
+        print(f"\n✅ Using config: {config_path.relative_to(repo_root)}")
     
     # Ask for output directory
     print()
