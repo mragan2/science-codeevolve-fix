@@ -10,6 +10,8 @@
 #
 # ===--------------------------------------------------------------------------------------===#
 
+import asyncio
+import concurrent.futures
 import json
 import logging
 import pathlib
@@ -283,3 +285,42 @@ class Evaluator:
             # By default, don't store output to avoid memory issues with large outputs
             prog.output = None
             prog.warning = None
+
+    async def evaluate_batch(
+        self, progs: list[Program], max_workers: Optional[int] = None
+    ) -> list[Program]:
+        """Evaluates a batch of programs concurrently.
+
+        This helper uses a thread pool to dispatch multiple ``execute`` calls in
+        parallel. Because program execution happens in subprocesses, threads are
+        sufficient to unlock parallelism without incurring the pickling
+        overhead required by process-based pools.
+
+        Args:
+            progs: List of :class:`Program` instances to evaluate. Each program
+                is updated in place with its execution results.
+            max_workers: Optional override for the maximum number of concurrent
+                evaluations. If not provided, it defaults to the smaller of the
+                available logical CPUs and the batch size.
+
+        Returns:
+            The list of input programs after evaluation.
+        """
+
+        if not progs:
+            return []
+
+        logical_cpus: int = psutil.cpu_count(logical=True) or 1
+        worker_count: int = max_workers or min(len(progs), logical_cpus)
+        self.logger.info(
+            "Evaluating %d programs in parallel with %d workers...",
+            len(progs),
+            worker_count,
+        )
+
+        loop = asyncio.get_running_loop()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=worker_count) as executor:
+            tasks = [loop.run_in_executor(executor, self.execute, prog) for prog in progs]
+            await asyncio.gather(*tasks)
+
+        return progs
