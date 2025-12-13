@@ -170,12 +170,12 @@ class Evaluator:
 
         # we copy cwd to temp and pass this temp directory as
         # the cwd for the program being executed
-        tmp_dir: tempfile.TemporaryDirectory = tempfile.TemporaryDirectory(delete=False)
+        tmp_dir: tempfile.TemporaryDirectory = tempfile.TemporaryDirectory()
         temp_cwd: Optional[tempfile.TemporaryDirectory] = None
         temp_cwd_dir: Optional[tempfile.TemporaryDirectory] = None
 
         if self.cwd:
-            temp_cwd_dir = tempfile.TemporaryDirectory(delete=False)
+            temp_cwd_dir = tempfile.TemporaryDirectory()
             temp_cwd = temp_cwd_dir.name
             try:
                 shutil.copytree(self.cwd, temp_cwd, dirs_exist_ok=True)
