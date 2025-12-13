@@ -814,6 +814,7 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
             )
 
         evaluator.execute(init_sol)
+        init_sol.fitness = 0.0
         if init_sol.returncode == 0:
             init_sol.fitness = init_sol.eval_metrics[evolve_config["fitness_key"]]
 

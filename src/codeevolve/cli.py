@@ -117,7 +117,7 @@ def setup_isl_args(args: Dict[str, Any], num_islands: int) -> Dict[int, Dict[str
         latest_common_ckpt = max(
             int(re.search(r"ckpt_(\d+)\.pkl$", f).group(1)) for f in common_ckpts
         )
-        if args["load_ckpt"] and f"ckpt_{args["load_ckpt"]}.pkl" in common_ckpts:
+        if args["load_ckpt"] and f"ckpt_{args['load_ckpt']}.pkl" in common_ckpts:
             global_ckpt = args["load_ckpt"]
             print(f"Loading common checkpoint: {global_ckpt}")
         else:
