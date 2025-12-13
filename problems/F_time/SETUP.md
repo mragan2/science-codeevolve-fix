@@ -55,5 +55,7 @@ bash run.sh
 ## 6) Verify expected directories
 If you see an error like `Input directory does not exist: .../problems/problems/F_time/input/`, ensure you are running the bundled `problems/F_time/run.sh` from this repository so it points to `problems/F_time/input/`. The default layout already includes the necessary `input/` and `configs/` folders.
 
+export API_BASE="http://localhost:11434/v1" && export API_KEY="944ce3c4b46f4aa5a073887d88c18773.955is0NZY-YbcBVD7nzAYtNd" && /home/rag/Projects/science-codeevolve/.conda/bin/codeevolve --inpt_dir="problems/F_time" --cfg_path="problems/F_time/configs/config.yaml" --out_dir="experiments/F_time/run_$(date +%Y%m%d_%H%M%S)" --load_ckpt=-1 --terminal_logging
+
 ## 7) Outputs
 Runs are written to `experiments/F_time/` with a timestamped subfolder. Check the script output footer for the run status and the exact output path.

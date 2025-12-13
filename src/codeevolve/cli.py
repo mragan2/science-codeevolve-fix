@@ -117,7 +117,7 @@ def setup_isl_args(args: Dict[str, Any], num_islands: int) -> Dict[int, Dict[str
         latest_common_ckpt = max(
             int(re.search(r"ckpt_(\d+)\.pkl$", f).group(1)) for f in common_ckpts
         )
-        if args["load_ckpt"] and f"ckpt_{args["load_ckpt"]}.pkl" in common_ckpts:
+        if args["load_ckpt"] and f"ckpt_{args['load_ckpt']}.pkl" in common_ckpts:
             global_ckpt = args["load_ckpt"]
             print(f"Loading common checkpoint: {global_ckpt}")
         else:
@@ -183,6 +183,7 @@ def main():
         sys.exit(1)
 
     evolve_config: Dict[str, Any] = config["EVOLVE_CONFIG"]
+    adversarial_cfg: Dict[str, Any] = config.get("ADVERSARIAL", {})
     isl2args: Dict[int, Dict[str, Any]] = setup_isl_args(args, evolve_config["num_islands"])
 
     # synchronization primitives
@@ -197,6 +198,9 @@ def main():
     barrier: mps.Barrier = mp.Barrier(parties=evolve_config["num_islands"])
     log_queue: mp.Queue = mp.Queue()
 
+    manager = mp.Manager()
+    team_registry = manager.dict() if adversarial_cfg.get("enabled", False) else None
+
     global_data: GlobalData = GlobalData(
         best_sol=global_best_sol,
         early_stop_counter=early_stop_counter,
@@ -204,6 +208,8 @@ def main():
         lock=lock,
         barrier=barrier,
         log_queue=log_queue,
+        team_registry=team_registry,
+        adversarial_cfg=adversarial_cfg,
     )
 
     # islands
@@ -231,11 +237,14 @@ def main():
         log_formatter_daemon.start()
 
     # spawn processes
+    teams: List[str] = adversarial_cfg.get("teams", ["red", "blue"])
+
     for island_id in range(evolve_config["num_islands"]):
         isl_data: IslandData = IslandData(
             id=island_id,
             in_neigh=in_adj[island_id] if in_adj else None,
             out_neigh=out_adj[island_id] if out_adj else None,
+            team=teams[island_id % len(teams)] if adversarial_cfg.get("enabled", False) else None,
         )
 
         process = mp.Process(

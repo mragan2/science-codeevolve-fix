@@ -26,6 +26,12 @@ conda activate codeevolve
 ```
 The command-line version of codeevolve is implemented in ```src/codeevolve/cli.py```, and ```scripts/run.sh``` contains a bash script for running codeevolve on a given benchmark. The most important variables to be defined in this file are the ```API_KEY, API_BASE``` environment variables for connecting with an LLM provider.
 
+CodeEvolve now also supports an optional **NovelAgent** that injects exploratory prompt updates. Enable it by adding a `NOVEL_AGENT` block to your config (see `problems/problem_template/configs/config_mp.yaml`), which will occasionally replace the standard meta-prompting step with a more diversity-focused proposal.
+
+For competitive experiments, you can enable **adversarial islands** via the `ADVERSARIAL` block in the same config. Islands are partitioned into teams (e.g., red vs blue), each evolving independently with MAP-Elites while periodically cross-evaluating candidates against the rival team's current champions. Fitness can be based on win rate, Elo, or a hybrid score, and cross-play can be scheduled every _k_ epochs or alternated between teams to synchronize coevolutionary phases.
+
+You can also inject a lighthearted **climate pressure** by enabling the `CLIMATE` block. Each epoch belongs to a season (choose a single perpetual season or a 4-season cycle), and a small set of Python helpers are randomly tagged as "heat-tolerant" or "cold-resilient." Programs using functions aligned with the current season earn a configurable fitness multiplier, making heat-resistant code more likely to survive during hotter phases.
+
 For a concrete example, see the [F_time setup guide](problems/F_time/SETUP.md) for step-by-step instructions to clone the repository under `/home/rag/Projects`, configure the conda environment, and run the bundled benchmark script.
 
 More comprehensive tutorials will be released soon.

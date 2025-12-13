@@ -25,12 +25,37 @@ ENSEMBLE: [{model_name: 'GOOGLE_GEMINI-2.5-FLASH', temp: 0.7, top_p: 0.95, retri
 
 SAMPLER_AUX_LM: {model_name: 'GOOGLE_GEMINI-2.5-FLASH', temp: 0.7, top_p: 0.95, retries: 3, weight: 1, verify_ssl: False}
 
+NOVEL_AGENT:
+  enabled: False
+  exploration_rate: 0.25
+  max_inspirations: 3
+  lm: {model_name: 'GOOGLE_GEMINI-2.5-PRO', temp: 0.9, top_p: 0.95, retries: 3, weight: 1, verify_ssl: False}
+
 EMBEDDING: {model_name: 'AZURE_TEXT-EMBEDDING-3-SMALL', retries: 3, verify_ssl: False}
 
 MAP_ELITES: {elite_map_type: 'grid',
              features: [
               {name: 'feat1', min_val: 0, max_val: 1, num_bins: 10}
              ]}
+
+CLIMATE:
+  enabled: False
+  seasons: [perpetual, monsoon, dry, polar]
+  season_length: 8
+  function_pool: [len, sum, min, max, sorted, enumerate, zip, range, map, filter]
+  hot_fraction: 0.5
+  survival_weight: 0.25
+  neutral_baseline: 0.5
+
+ADVERSARIAL:
+  enabled: False
+  teams: [red, blue]
+  cross_eval_interval: 5
+  opponents_per_eval: 2
+  fitness_metric: win_rate # options: win_rate, elo, hybrid
+  base_fitness_weight: 0.25 # only used when fitness_metric is hybrid
+  elo_k: 24
+  alternating_phases: True
 
 # MAP_ELITES: {elite_map_type: 'cvt',
 #              features: [

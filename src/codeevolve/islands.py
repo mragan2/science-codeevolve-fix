@@ -18,7 +18,7 @@ import multiprocessing.synchronize as mps
 import threading
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import DefaultDict, Dict, List, Optional, Tuple
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 
 from codeevolve.database import Program
 
@@ -60,6 +60,7 @@ class IslandData:
     id: int
     in_neigh: Optional[List[PipeEdge]]
     out_neigh: Optional[List[PipeEdge]]
+    team: Optional[str] = None
 
 
 @dataclass
@@ -118,6 +119,8 @@ class GlobalData:
     lock: mps.Lock
     barrier: mps.Barrier
     log_queue: mp.Queue
+    team_registry: Optional[Dict[str, Program]] = None
+    adversarial_cfg: Optional[Dict[str, Any]] = None
 
 
 def early_stopping_check(

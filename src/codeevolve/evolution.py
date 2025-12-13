@@ -18,6 +18,17 @@ from uuid import uuid4
 import numpy as np
 import yaml
 
+from codeevolve.adversarial import (
+    AdversarialConfig,
+    CompetitiveResult,
+    assign_team,
+    compute_competitive_result,
+    sample_opponents,
+    should_cross_evaluate,
+    update_team_registry,
+)
+from codeevolve.climate import ClimateConfig, evaluate_heat_resilience
+from codeevolve.agents import NovelAgent
 from codeevolve.database import EliteFeature, Program, ProgramDatabase
 from codeevolve.evaluator import Evaluator
 from codeevolve.islands import (
@@ -52,6 +63,7 @@ async def evolve_loop(
     evaluator: Evaluator,
     embedding: Optional[OpenAIEmbedding],
     logger: logging.Logger,
+    novel_agent: Optional[NovelAgent] = None,
 ) -> None:
     """Executes the main evolutionary loop for program and prompt co-evolution.
 
@@ -85,11 +97,42 @@ async def evolve_loop(
 
     meta_prompting: bool = evolve_config.get("meta_prompting", False)
     use_embedding: bool = evolve_config.get("use_embedding", False)
+    novel_agent_exploration_rate: float = (
+        novel_agent.exploration_rate if novel_agent is not None else 0
+    )
 
     mp_start_marker: str = evolve_config.get("mp_start_marker", "# PROMPT-BLOCK-START")
     mp_end_marker: str = evolve_config.get("mp_end_marker", "# PROMPT-BLOCK-END")
     evolve_start_marker: str = evolve_config.get("evolve_start_marker", "# EVOLVE-BLOCK-START")
     evolve_end_marker: str = evolve_config.get("evolve_end_marker", "# EVOLVE-BLOCK-END")
+
+    adversarial_cfg_raw: Dict[str, Any] = config.get("ADVERSARIAL", {})
+    default_adv_cfg: AdversarialConfig = AdversarialConfig()
+    adversarial_cfg: AdversarialConfig = AdversarialConfig(
+        **{
+            field: adversarial_cfg_raw.get(
+                field, getattr(default_adv_cfg, field)
+            )
+            for field in AdversarialConfig.__dataclass_fields__
+        }
+    )
+
+    climate_cfg_raw: Dict[str, Any] = config.get("CLIMATE", {})
+    default_climate_cfg: ClimateConfig = ClimateConfig()
+    climate_cfg: ClimateConfig = ClimateConfig(
+        **{
+            field: climate_cfg_raw.get(field, getattr(default_climate_cfg, field))
+            for field in ClimateConfig.__dataclass_fields__
+        }
+    )
+    team_name: str = isl_data.team or assign_team(isl_data.id, adversarial_cfg.teams)
+    logger.info("Adversarial team: %s | cfg: %s", team_name, adversarial_cfg)
+    if climate_cfg.enabled:
+        logger.info(
+            "Climate seasons enabled (%s) with span=%s epochs",
+            climate_cfg.seasons,
+            climate_cfg.season_length,
+        )
 
     for epoch in range(start_epoch + 1, evolve_config["num_epochs"] + 1):
         logger.info(f"========= EPOCH {epoch} =========")
@@ -156,29 +199,50 @@ async def evolve_loop(
         if meta_prompting and (gen_init_pop or exploration):
             logger.info("=== META-PROMPT STEP ===")
             meta_prompt_success: bool = False
+            use_novel_agent: bool = False
+            if novel_agent is not None and (gen_init_pop or exploration):
+                use_novel_agent = novel_agent.should_activate(sol_db.random_state)
+                logger.info(
+                    "Novel agent active: %s (exploration rate %.2f)",
+                    use_novel_agent,
+                    novel_agent_exploration_rate,
+                )
             ## GENERATE DIFF
             try:
                 # Note: Logging is handled inside the sampler's meta_prompt method as it's
                 # directly related to the LLM operation and provides better context
-                prompt_diff, prompt_tok, compl_tok = await prompt_sampler.meta_prompt(
-                    prompt=parent_prompt, prog=parent_sol
-                )
+                if use_novel_agent:
+                    prompt_diff, prompt_tok, compl_tok = await novel_agent.propose_prompt(
+                        prompt=parent_prompt,
+                        prog=parent_sol,
+                        inspirations=inspirations,
+                    )
+                    motive: str = "novel_prompt"
+                else:
+                    prompt_diff, prompt_tok, compl_tok = await prompt_sampler.meta_prompt(
+                        prompt=parent_prompt, prog=parent_sol
+                    )
+                    motive = "meta_prompt"
                 meta_prompt_success = True
 
                 evolve_state["tok_usage"].append(
                     {
                         "epoch": epoch,
-                        "motive": "meta_prompt",
+                        "motive": motive,
                         "prompt_tok": prompt_tok,
                         "compl_tok": compl_tok,
-                        "model_name": prompt_sampler.aux_lm.model_name,
+                        "model_name": (
+                            novel_agent.lm.model_name
+                            if use_novel_agent and novel_agent is not None
+                            else prompt_sampler.aux_lm.model_name
+                        ),
                     }
                 )
             except Exception as err:
                 logger.error(f"Error when running prompt on LM: {str(err)}.")
                 error_info: Dict[str, Any] = {
                     "epoch": epoch,
-                    "motive": "meta_prompt",
+                    "motive": "novel_prompt" if use_novel_agent else "meta_prompt",
                     "error_msg": str(err),
                 }
                 evolve_state["errors"].append(error_info)
@@ -189,7 +253,7 @@ async def evolve_loop(
                     logger.info("Attempting to SEARCH/REPLACE...")
                     child_prompt_txt: str = apply_diff_with_fallback(
                         parent_code=parent_prompt.code,
-                        diff=prompt_diff,
+                        diff_or_text=prompt_diff,
                         start_marker=mp_start_marker,
                         end_marker=mp_end_marker,
                     )
@@ -314,10 +378,81 @@ async def evolve_loop(
 
             ## EVALUATING CHILD PROGRAM
             evaluator.execute(child_sol)
+            base_fitness: float = 0
+            climate_multiplier: float = 1.0
             if child_sol.returncode == 0:
-                child_sol.fitness = child_sol.eval_metrics[evolve_config["fitness_key"]]
+                base_fitness = child_sol.eval_metrics[evolve_config["fitness_key"]]
+
+                if climate_cfg.enabled and child_sol.language.lower() == "python":
+                    climate_eval = evaluate_heat_resilience(
+                        code=child_sol.code,
+                        epoch=epoch,
+                        config=climate_cfg,
+                        random_state=sol_db.random_state,
+                    )
+                    climate_multiplier = climate_eval.fitness_multiplier
+                    child_sol.eval_metrics.update(
+                        {
+                            "climate_alignment": climate_eval.alignment,
+                            "climate_survival_chance": climate_eval.survival_chance,
+                            "climate_multiplier": climate_multiplier,
+                            "climate_season_index": climate_eval.season.index,
+                            "climate_is_hot": 1.0
+                            if climate_eval.season.climate == "hot"
+                            else 0.0,
+                            "climate_hot_hits": climate_eval.hot_hits,
+                            "climate_cold_hits": climate_eval.cold_hits,
+                        }
+                    )
+                    logger.info(
+                        (
+                            "Climate season '%s' (%s) multiplier %.3f | alignment=%.3f,"
+                            " hot_hits=%d, cold_hits=%d"
+                        ),
+                        climate_eval.season.name,
+                        climate_eval.season.climate,
+                        climate_multiplier,
+                        climate_eval.alignment,
+                        climate_eval.hot_hits,
+                        climate_eval.cold_hits,
+                    )
+
+            child_sol.fitness = base_fitness * climate_multiplier
             child_sol.prog_msg = format_prog_msg(prog=child_sol)
             child_sol.features = child_sol.eval_metrics
+
+            competitive_result: Optional[CompetitiveResult] = None
+            if adversarial_cfg.enabled and child_sol.returncode == 0:
+                if should_cross_evaluate(epoch, team_name, adversarial_cfg):
+                    opponents: List[Program] = sample_opponents(
+                        registry=global_data.team_registry,
+                        team=team_name,
+                        teams=adversarial_cfg.teams,
+                        max_opponents=adversarial_cfg.opponents_per_eval,
+                        random_state=sol_db.random_state,
+                    )
+
+                    if opponents:
+                        competitive_result = compute_competitive_result(
+                            candidate=child_sol,
+                            opponents=opponents,
+                            base_fitness_key=evolve_config["fitness_key"],
+                            config=adversarial_cfg,
+                        )
+                        child_sol.eval_metrics["adversarial_win_rate"] = (
+                            competitive_result.win_rate
+                        )
+                        child_sol.eval_metrics["adversarial_matches"] = (
+                            competitive_result.matches
+                        )
+                        child_sol.eval_metrics["adversarial_rating"] = (
+                            competitive_result.rating
+                        )
+                        child_sol.matches += competitive_result.matches
+                        child_sol.rating = competitive_result.rating
+                        child_sol.fitness = competitive_result.fitness
+                    else:
+                        logger.info("Adversarial evaluation enabled but no opponents available.")
 
             if child_sol.fitness > prompt.fitness:
                 logger.info("Child solution improves on parent prompt fitness.")
@@ -358,6 +493,13 @@ async def evolve_loop(
             ## ADD TO DB
             logger.info("Adding child_sol to sol_db.")
             sol_db.add(child_sol)
+
+            if adversarial_cfg.enabled:
+                update_team_registry(
+                    registry=global_data.team_registry,
+                    team=team_name,
+                    candidate=sol_db.programs[sol_db.best_prog_id],
+                )
 
             if child_sol.id == sol_db.best_prog_id:
                 logger.info(f"New best program found -> {child_sol.fitness}.")
@@ -528,6 +670,17 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
 
     config: Dict[Any, Any] = yaml.safe_load(open(args["cfg_path"], "r"))
     evolve_config = config["EVOLVE_CONFIG"]
+    adversarial_cfg_raw: Dict[str, Any] = config.get("ADVERSARIAL", {})
+    default_adv_cfg: AdversarialConfig = AdversarialConfig()
+    adversarial_cfg: AdversarialConfig = AdversarialConfig(
+        **{
+            field: adversarial_cfg_raw.get(
+                field, getattr(default_adv_cfg, field)
+            )
+            for field in AdversarialConfig.__dataclass_fields__
+        }
+    )
+    team_name: str = isl_data.team or assign_team(isl_data.id, adversarial_cfg.teams)
 
     ensemble: LMEnsemble = LMEnsemble(
         models_cfg=config["ENSEMBLE"],
@@ -544,6 +697,24 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
         ),
         logger=logger,
     )
+
+    novel_agent_cfg: Dict[str, Any] = config.get("NOVEL_AGENT", {})
+    novel_agent: Optional[NovelAgent] = None
+    if novel_agent_cfg.get("enabled", False):
+        assert (
+            novel_agent_cfg.get("lm", None) is not None
+        ), "NOVEL_AGENT.lm must be defined when NOVEL_AGENT.enabled is true."
+
+        novel_agent_lm = OpenAILM(
+            **novel_agent_cfg["lm"], api_key=args["api_key"], api_base=args["api_base"]
+        )
+
+        novel_agent = NovelAgent(
+            lm=novel_agent_lm,
+            exploration_rate=novel_agent_cfg.get("exploration_rate", 0.2),
+            max_inspirations=novel_agent_cfg.get("max_inspirations", 2),
+            logger=logger,
+        )
 
     evaluator: Evaluator = Evaluator(
         eval_path=Path(config["EVAL_FILE_NAME"]),
@@ -571,6 +742,13 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
         init_prompt: Program = prompt_db.programs[prompt_db.best_prog_id]
         init_sol: Program = sol_db.programs[sol_db.best_prog_id]
         init_sol.prompt_id = init_prompt.id
+
+        if adversarial_cfg.enabled:
+            update_team_registry(
+                registry=global_data.team_registry,
+                team=team_name,
+                candidate=init_sol,
+            )
 
     else:
         logger.info("Starting anew.")
@@ -636,6 +814,7 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
             )
 
         evaluator.execute(init_sol)
+        init_sol.fitness = 0.0
         if init_sol.returncode == 0:
             init_sol.fitness = init_sol.eval_metrics[evolve_config["fitness_key"]]
 
@@ -644,12 +823,21 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
 
         sol_db.add(init_sol)
 
+        if adversarial_cfg.enabled:
+            update_team_registry(
+                registry=global_data.team_registry,
+                team=team_name,
+                candidate=init_sol,
+            )
+
     logger.info(f"sol_db={sol_db}")
     logger.info(f"prompt_db={prompt_db}")
     logger.info(f"ensemble={ensemble}")
     logger.info(f"prompt_sampler={prompt_sampler}")
     logger.info(f"evaluator={evaluator}")
     logger.info(f"embedding={embedding}")
+    logger.info(f"novel_agent={novel_agent}")
+    logger.info(f"adversarial_team={team_name}")
     logger.info(f"init_prog={init_sol}")
 
     # UPDATE GLOBAL BEST
@@ -683,4 +871,5 @@ async def codeevolve(args: Dict[str, Any], isl_data: IslandData, global_data: Gl
         evaluator,
         embedding,
         logger,
+        novel_agent,
     )

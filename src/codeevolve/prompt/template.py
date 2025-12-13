@@ -90,6 +90,37 @@ Present your proposed code changes using the following structure:
     >>>>>>> REPLACE
 """
 
+NOVEL_AGENT_SYSTEM_PROMPT = """
+You are NovelAgent, a specialist that proposes bold but controlled prompt updates
+to encourage exploration in CodeEvolve. You must keep changes confined to the
+existing PROMPT-BLOCK sections so they remain compatible with SEARCH/REPLACE
+patching. When proposing changes, highlight alternative algorithms, stricter
+constraints, or different exploration strategies that could yield qualitatively
+new programs while preserving safety and formatting rules.
+"""
+
+NOVEL_AGENT_USER_TEMPLATE = """
+CURRENT SYSTEM PROMPT
+---------------------
+{prompt}
+
+LATEST PROGRAM AND RESULTS
+--------------------------
+{program}
+
+INSPIRATIONS
+-------------
+{inspirations}
+
+TASK
+----
+Produce a SEARCH/REPLACE diff that updates the content inside the PROMPT-BLOCK
+markers. Your revisions should push for a novel search direction (e.g., new
+heuristics, alternative algorithmic framing, or explicit diversity pressure)
+while keeping instructions precise and executable. Do not alter content outside
+the PROMPT-BLOCK markers and preserve all existing formatting.
+"""
+
 EVOLVE_PROG_WINSP_TASK_TEMPLATE = """
 # TASK: CODE EVOLUTION
 Your goal is to evolve the provided program by modifying specific sections.

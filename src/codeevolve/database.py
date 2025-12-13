@@ -81,6 +81,10 @@ class Program:
 
     embedding: Optional[List[float]] = None
 
+    # Adversarial evaluation metadata
+    rating: float = 1000.0
+    matches: int = 0
+
     def __repr__(self) -> str:
         """Returns a string representation of the Program instance.
 

@@ -129,17 +129,17 @@ SYS_MSG: |
 
     **Recommended implementation patterns:**
         TODO
-
+        
     VALIDATION FRAMEWORK:
         TODO
 
   # PROMPT-BLOCK-END
 
-CODEBASE_PATH: 'src/'
+CODEBASE_PATH: 'input/src/'
 INIT_FILE_DATA:
   filename: 'initial_program.py'
   language: 'python'
-EVAL_FILE_NAME: 'evaluate.py'
+EVAL_FILE_NAME: 'input/evaluate.py'
 
 # --- RESOURCES ---
 RESOURCES:
@@ -176,7 +176,7 @@ ENSEMBLE:
     retries: 3
     weight: 0.8
     verify_ssl: False
-  - model_name: 'rnj-1:8b'
+  - model_name: 'deepseek-r1:1.5b'
     temp: 0.85
     top_p: 0.95
     retries: 3
@@ -185,7 +185,7 @@ ENSEMBLE:
 
 # --- AUXILIARY MODELS ---
 SAMPLER_AUX_LM:
-  model_name: 'qwen2.5-coder:7b'
+  model_name: 'gemma3:4b'
   temp: 0.7
   top_p: 0.95
   retries: 3
