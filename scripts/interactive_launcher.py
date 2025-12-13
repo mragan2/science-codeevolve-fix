@@ -2,8 +2,8 @@
 
 This script simplifies launching experiments by asking only for:
 - Project name (within problems/ directory)
-- Config name (optional)
-- Output directory name (optional)
+- Config name (when using existing config)
+- Output directory name (optional, auto-suggested)
 
 All paths are automatically derived from the standard project structure.
 """
@@ -248,18 +248,15 @@ def edit_mapping(mapping: Mapping[str, Any]) -> Dict[str, Any]:
 
 
 def build_config_payload(
-    input_dir: Path, evaluator_path: Path, base_config: Dict[str, Any] | None, allow_edit: bool, allow_overrides: bool
+    base_config: Dict[str, Any] | None, allow_edit: bool, allow_overrides: bool
 ) -> Dict[str, Any]:
-    """Combine input directory and evaluator paths with existing or new configuration content.
+    """Build configuration payload with optional edits and overrides.
     
-    Note: We store the input directory path rather than individual object path,
-    as this is what the CLI expects.
+    Note: This doesn't include input_dir or evaluator paths, as those are
+    passed via CLI arguments, not config file.
     """
 
     config_data: Dict[str, Any] = base_config.copy() if base_config else {}
-    # Store paths that the CLI expects
-    config_data["input_directory"] = str(input_dir)
-    config_data["evaluator_path"] = str(evaluator_path)
 
     if allow_edit:
         if config_data:
@@ -405,7 +402,7 @@ def main() -> None:
             return
         
         # Option to save edits to new file
-        if yes_no("Save edits to a new file so the original stays pristine?", default=False):
+        if yes_no("Save edits to a new file so the original stays pristine?", default=True):
             try:
                 new_config_name = input(f"New config name [{config_name}_edited]: ").strip()
             except EOFError:
@@ -435,7 +432,7 @@ def main() -> None:
     # Only build/save config if we're creating new or explicitly editing
     if not use_existing_config or allow_edit or allow_overrides:
         # Build config with modifications
-        config_payload = build_config_payload(input_dir, evaluator_path, base_config, allow_edit, allow_overrides)
+        config_payload = build_config_payload(base_config, allow_edit, allow_overrides)
         
         # Save config
         save_config(config_payload, config_path)
